@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 
 // Authentication services
 export const authService = {
-  // Sign up new user
+  // Sign up new user (public self-registration)
   async signUp(email, password, metadata = {}) {
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -15,7 +15,7 @@ export const authService = {
         }
       }
     });
-    
+
     if (error) throw error;
     return data;
   },
@@ -89,22 +89,36 @@ export const usersService = {
   },
 
   // Create user (admin only)
+  // NOTE: supabase.auth.admin.* requires the service_role key and must NEVER be called
+  // from the browser. As a temporary workaround we use public signUp() and then restore
+  // the admin's session so the admin doesn't get logged out.
   async create(userData) {
-    // First create auth user
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    // Save the current admin session so we can restore it after signUp
+    const { data: { session: adminSession } } = await supabase.auth.getSession();
+
+    // Create the new auth user via public signUp (trigger handle_new_user creates the profile)
+    const { data: authData, error: authError } = await supabase.auth.signUp({
       email: userData.email,
       password: userData.password,
-      email_confirm: true,
-      user_metadata: {
-        username: userData.username,
-        full_name: userData.fullName,
-        role: userData.role
+      options: {
+        data: {
+          username: userData.username,
+          full_name: userData.fullName,
+          role: userData.role
+        }
       }
     });
 
     if (authError) throw authError;
 
-    // Profile is created automatically by trigger
+    // Restore the admin's session (signUp auto-logs-in as the new user)
+    if (adminSession) {
+      await supabase.auth.setSession({
+        access_token: adminSession.access_token,
+        refresh_token: adminSession.refresh_token
+      });
+    }
+
     return authData;
   },
 
