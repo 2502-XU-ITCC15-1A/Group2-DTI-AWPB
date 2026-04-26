@@ -3,6 +3,8 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AppLayout from "./components/layout/AppLayout";
 import initialTemplateData from "./data/awpb_dropdown_tree.json";
 
+import { getTemplateHierarchy } from "./services/templateService";
+
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import Home from "./pages/Home";
@@ -42,12 +44,45 @@ function App() {
   const [entryBeingEdited, setEntryBeingEdited] = useState(null);
   const [submitEntryDraft, setSubmitEntryDraft] = useState(null);
   const [accounts, setAccounts] = useState(INITIAL_ACCOUNTS);
-  const [templateData, setTemplateData] = useState(createInitialTemplateState);
+  const [templateData, setTemplateData] = useState({ hierarchy: {} });
 
   const [submissionWindow, setSubmissionWindow] = useState({
     startDate: "2026-04-01",
     endDate: "2026-04-30",
   });
+
+  useEffect(() => {
+  loadTemplate();
+}, []);
+
+async function loadTemplate() {
+  const { data, error } = await getTemplateHierarchy();
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  const hierarchy = {};
+
+  data.forEach((row) => {
+    const c = row.component;
+    const s = row.sub_component;
+    const k = row.key_activity;
+
+    if (!hierarchy[c]) hierarchy[c] = {};
+    if (!hierarchy[c][s]) hierarchy[c][s] = {};
+    if (!hierarchy[c][s][k]) hierarchy[c][s][k] = [];
+
+    hierarchy[c][s][k].push({
+      no: row.no,
+      performanceIndicator: row.performance_indicator,
+      subActivities: row.sub_activity ? [row.sub_activity] : [],
+    });
+  });
+
+  setTemplateData({ hierarchy });
+}
 
   const [authUser, setAuthUser] = useState(null);
   const [toast, setToast] = useState(null);
