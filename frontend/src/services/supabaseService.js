@@ -382,7 +382,18 @@ export const submissionService = {
     
     if (error) throw error;
     return data;
-  }
+  },
+
+  async updateWindow(id, updates) {
+  const { data, error } = await supabase
+    .from('submission_windows')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
 };
 
 // Real-time subscriptions
