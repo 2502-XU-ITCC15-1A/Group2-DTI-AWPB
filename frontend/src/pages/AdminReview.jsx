@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, Eye, Trash2 } from "lucide-react";
 
 import AdminEntryReviewModal from "../components/admin/AdminEntryReviewModal";
@@ -7,7 +7,53 @@ import AdminDeleteEntryModal from "../components/admin/AdminDeleteEntryModal";
 // === CONNECTING TO SUPABASE ===
 // We use entriesService to save admin actions (approve / return / reject /
 // delete) directly to the database, so the encoder sees them after refresh.
+// We also use the supabase client directly to read the admin_entry_view,
+// which already joins the names (unit, component, etc.) so we don't need to
+// look them up ourselves.
+import { supabase } from "../lib/supabase";
 import { entriesService } from "../services/supabaseService";
+
+// ---------------------------------------------------------------------------
+// The database speaks snake_case (title_of_activities). The UI speaks
+// camelCase (titleOfActivities). This helper translates one row from the
+// admin_entry_view into the shape the rest of this page expects.
+// ---------------------------------------------------------------------------
+function transformViewRow(row) {
+  if (!row) return row;
+
+  // Some rows store the monthly breakdown as a JSON array. We convert it
+  // into the shape the table preview / modal expect.
+  const monthlyBreakdown = Array.isArray(row.monthly_breakdown)
+    ? row.monthly_breakdown.map((m) => ({
+        month: m.month,
+        target: m.target_quantity ?? m.target ?? 0,
+        amount: (m.target_quantity ?? m.target ?? 0) * (row.unit_cost || 0),
+      }))
+    : [];
+
+  return {
+    id: row.id,
+    ownerId: row.owner_id,
+    ownerUsername: row.owner_username || "",
+    ownerFullName: row.owner_full_name || "",
+    planningYear: row.planning_year,
+    unit: row.unit,
+    component: row.component,
+    subComponent: row.sub_component,
+    keyActivity: row.key_activity,
+    no: row.activity_no ?? "",
+    performanceIndicator: row.performance_indicator || "",
+    subActivity: row.sub_activity || "",
+    titleOfActivities: row.title_of_activities,
+    unitCost: Number(row.unit_cost) || 0,
+    status: row.status,
+    adminComment: row.reviewer_notes || row.admin_comment || "",
+    submittedAt: row.submitted_at || row.submission_date || "",
+    reviewedAt: row.reviewed_at || row.review_date || "",
+    monthlyBreakdown,
+    grandTotal: Number(row.grand_total) || 0,
+  };
+}
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -58,7 +104,7 @@ function getStatusBadgeVariant(status) {
 }
 
 export default function AdminReview({
-  entries = [],
+  entries: entriesProp = [],
   onUpdateEntry,
   onDeleteEntry,
   onShowToast,
@@ -69,6 +115,56 @@ export default function AdminReview({
   const [statusFilter, setStatusFilter] = useState("all");
   const [unitFilter, setUnitFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("all");
+
+  // -------------------------------------------------------------------------
+  // Load the real list of entries from Supabase when the page opens.
+  //
+  // Steps:
+  //   1. Ask Supabase for all entries (entriesService.getAll() automatically
+  //      returns everyone's entries because we're logged in as admin).
+  //   2. Save them in local state so the table shows real data.
+  //   3. While the network request is in flight, we fall back to whatever
+  //      the parent App.jsx passed in, so the page is never blank.
+  //   4. If anything fails, show an error toast.
+  // -------------------------------------------------------------------------
+  const [supabaseEntries, setSupabaseEntries] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        // Query admin_entry_view directly because it already includes the
+        // joined names (unit, component, sub_component, key_activity) plus
+        // the computed grand_total and monthly_breakdown.
+        const { data, error } = await supabase
+          .from("admin_entry_view")
+          .select("*")
+          .order("submitted_at", { ascending: false });
+
+        if (error) throw error;
+
+        // Translate every snake_case row into the camelCase shape the rest
+        // of the page expects.
+        const translated = (data || []).map(transformViewRow);
+        if (!cancelled) setSupabaseEntries(translated);
+      } catch (err) {
+        console.error("Failed to load entries from Supabase:", err);
+        if (!cancelled) {
+          onShowToast?.({
+            title: "Could not load entries",
+            description: err.message || "Please refresh the page.",
+            type: "error",
+          });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [onShowToast]);
+
+  // Use live Supabase data when it's ready; otherwise fall back to the prop.
+  const entries = supabaseEntries ?? entriesProp;
 
   const availableUnits = useMemo(() => {
     return [...new Set(entries.map((entry) => entry.unit).filter(Boolean))].sort();
