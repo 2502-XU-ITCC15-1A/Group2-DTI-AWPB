@@ -4,6 +4,11 @@ import { Search, Eye, Trash2 } from "lucide-react";
 import AdminEntryReviewModal from "../components/admin/AdminEntryReviewModal";
 import AdminDeleteEntryModal from "../components/admin/AdminDeleteEntryModal";
 
+// === CONNECTING TO SUPABASE ===
+// We use entriesService to save admin actions (approve / return / reject /
+// delete) directly to the database, so the encoder sees them after refresh.
+import { entriesService } from "../services/supabaseService";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -97,61 +102,97 @@ export default function AdminReview({
     });
   }, [entries, searchTerm, statusFilter, unitFilter, yearFilter]);
 
+  // -------------------------------------------------------------------------
+  // Shared helper used by Approve / Return / Reject.
+  //
+  // Steps:
+  //   1. Translate the UI fields (status, adminComment, reviewedAt) into the
+  //      database column names (status, reviewer_notes, review_date).
+  //   2. Send the update to Supabase.
+  //   3. Also update the local list so the admin sees the change instantly.
+  //   4. Show the success toast.
+  // If anything fails, we show an error toast and do NOT close the modal so
+  // the admin can try again.
+  // -------------------------------------------------------------------------
+  const persistEntryUpdate = async (entryId, uiUpdates, successToast) => {
+    // Translate UI field names -> Supabase column names
+    const dbUpdates = {
+      status: uiUpdates.status,
+      reviewer_notes: uiUpdates.adminComment ?? "",
+      review_date: uiUpdates.reviewedAt,
+    };
+
+    try {
+      // Save to Supabase
+      await entriesService.update(entryId, dbUpdates);
+
+      // Keep the local list (in App.jsx) in sync
+      onUpdateEntry?.(entryId, uiUpdates);
+
+      onShowToast?.(successToast);
+      setSelectedEntry(null);
+    } catch (err) {
+      console.error("Failed to update entry in Supabase:", err);
+      onShowToast?.({
+        title: "Could not save changes",
+        description: err.message || "Please try again.",
+        type: "error",
+      });
+    }
+  };
+
   const handleApprove = (note) => {
     if (!selectedEntry) return;
-
     const entryTitle = selectedEntry.titleOfActivities;
-    onUpdateEntry(selectedEntry.id, {
-      status: "Approved",
-      adminComment: note || "",
-      reviewedAt: new Date().toISOString(),
-    });
-
-    onShowToast?.({
-      title: "Entry approved",
-      description: `${entryTitle} was approved successfully.`,
-      type: "success",
-    });
-
-    setSelectedEntry(null);
+    persistEntryUpdate(
+      selectedEntry.id,
+      {
+        status: "Approved",
+        adminComment: note || "",
+        reviewedAt: new Date().toISOString(),
+      },
+      {
+        title: "Entry approved",
+        description: `${entryTitle} was approved successfully.`,
+        type: "success",
+      },
+    );
   };
 
   const handleReturn = (note) => {
     if (!selectedEntry) return;
-
     const entryTitle = selectedEntry.titleOfActivities;
-    onUpdateEntry(selectedEntry.id, {
-      status: "Returned",
-      adminComment: note,
-      reviewedAt: new Date().toISOString(),
-    });
-
-    onShowToast?.({
-      title: "Entry returned",
-      description: `${entryTitle} was returned for revision.`,
-      type: "success",
-    });
-
-    setSelectedEntry(null);
+    persistEntryUpdate(
+      selectedEntry.id,
+      {
+        status: "Returned",
+        adminComment: note,
+        reviewedAt: new Date().toISOString(),
+      },
+      {
+        title: "Entry returned",
+        description: `${entryTitle} was returned for revision.`,
+        type: "success",
+      },
+    );
   };
 
   const handleReject = (note) => {
     if (!selectedEntry) return;
-
     const entryTitle = selectedEntry.titleOfActivities;
-    onUpdateEntry(selectedEntry.id, {
-      status: "Rejected",
-      adminComment: note,
-      reviewedAt: new Date().toISOString(),
-    });
-
-    onShowToast?.({
-      title: "Entry rejected",
-      description: `${entryTitle} was rejected.`,
-      type: "success",
-    });
-
-    setSelectedEntry(null);
+    persistEntryUpdate(
+      selectedEntry.id,
+      {
+        status: "Rejected",
+        adminComment: note,
+        reviewedAt: new Date().toISOString(),
+      },
+      {
+        title: "Entry rejected",
+        description: `${entryTitle} was rejected.`,
+        type: "success",
+      },
+    );
   };
 
   const clearFilters = () => {
@@ -161,23 +202,40 @@ export default function AdminReview({
     setYearFilter("all");
   };
 
-  const handleDelete = () => {
+  // -------------------------------------------------------------------------
+  // Delete an entry permanently. Asks Supabase to remove the row, then also
+  // removes it from the local list so the admin sees it disappear instantly.
+  // -------------------------------------------------------------------------
+  const handleDelete = async () => {
     if (!deleteTarget) return;
 
     const entryTitle = deleteTarget.titleOfActivities;
 
-    onDeleteEntry?.(deleteTarget.id);
-    onShowToast?.({
-      title: "Entry deleted",
-      description: `${entryTitle} was removed successfully.`,
-      type: "success",
-    });
+    try {
+      // Delete from Supabase first
+      await entriesService.delete(deleteTarget.id);
 
-    if (selectedEntry?.id === deleteTarget.id) {
-      setSelectedEntry(null);
+      // Then remove it from the local list
+      onDeleteEntry?.(deleteTarget.id);
+
+      onShowToast?.({
+        title: "Entry deleted",
+        description: `${entryTitle} was removed successfully.`,
+        type: "success",
+      });
+
+      if (selectedEntry?.id === deleteTarget.id) {
+        setSelectedEntry(null);
+      }
+      setDeleteTarget(null);
+    } catch (err) {
+      console.error("Failed to delete entry from Supabase:", err);
+      onShowToast?.({
+        title: "Could not delete entry",
+        description: err.message || "Please try again.",
+        type: "error",
+      });
     }
-
-    setDeleteTarget(null);
   };
 
   return (
