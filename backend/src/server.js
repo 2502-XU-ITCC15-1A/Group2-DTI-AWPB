@@ -1,12 +1,15 @@
-const express = require('express');
-const cors = require('cors');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const { body, validationResult } = require('express-validator');
-const { Pool } = require('pg');
-require('dotenv').config();
+import cors from 'cors';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import {body, validationResult} from 'express-validator';
+import pkg from 'pg';
+import dotenv from 'dotenv';
+import app from './app.js';
 
-const app = express();
+const { Pool } = pkg;
+dotenv.config();
+
+
 const PORT = process.env.PORT || 3000;
 
 // EMERGENCY BYPASS: Force ignore any internal rate limits for testing
@@ -37,10 +40,6 @@ pool.connect((err, client, release) => {
     release();
   }
 });
-
-// Middleware
-app.use(cors());
-app.use(express.json());
 
 // Database queries instead of mock data
 
@@ -837,4 +836,4 @@ app.listen(PORT, () => {
   console.log(`   - Encoder: enc_user / password123`);
 });
 
-module.exports = app;
+export default app;
