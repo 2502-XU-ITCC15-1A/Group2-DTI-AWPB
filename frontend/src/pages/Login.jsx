@@ -3,6 +3,7 @@ import { Link } from "react-router-dom"
 import { Eye, EyeOff } from "lucide-react"
 import logo from "../assets/logo.png"
 import { authService } from "../services/supabaseService"
+import { supabase } from "../lib/supabase"
 
 export default function Login({ onLogin, accounts = [] }) {
     const [showPassword, setShowPassword] = useState(false)
@@ -31,11 +32,26 @@ export default function Login({ onLogin, accounts = [] }) {
         setError("")
         
         try {
-            // Use email as username for Supabase auth
-            const email = formData.username.includes('@') 
-                ? formData.username.trim() 
-                : `${formData.username.trim()}@dti.gov.ph`
-            
+            // Resolve the input to an email address.
+            // - If the user typed something with "@", treat it as an email directly.
+            // - Otherwise, look up the email in the profiles table by username
+            //   via a SECURITY DEFINER RPC (so it works while the user is still
+            //   logged out and RLS would normally block reads).
+            const rawInput = formData.username.trim()
+            let email = rawInput
+
+            if (!rawInput.includes('@')) {
+                const { data: lookedUpEmail, error: rpcError } = await supabase
+                    .rpc('get_email_by_username', { p_username: rawInput })
+
+                if (rpcError || !lookedUpEmail) {
+                    setError("Invalid username or password.")
+                    console.error('Username lookup failed:', rpcError)
+                    return
+                }
+                email = lookedUpEmail
+            }
+
             const { user, session } = await authService.signIn(email, formData.password)
             
             // Get user profile to get role
