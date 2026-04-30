@@ -1,19 +1,13 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, Eye, Pencil, Lock, Trash2 } from "lucide-react";
-
 import EntryDetailsModal from "../components/entries/EntryDetailsModal";
 import AdminDeleteEntryModal from "../components/admin/AdminDeleteEntryModal";
+import { deleteEntry } from "../api/entries";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem,  SelectTrigger, SelectValue,} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -77,8 +71,6 @@ function isSubmissionWindowOpen(submissionWindow) {
 
 export default function MyEntries({
   entries = [],
-  onEditEntry,
-  onDeleteEntry,
   onShowToast,
   submissionWindow,
 }) {
@@ -121,9 +113,9 @@ export default function MyEntries({
   const handleEdit = (entry) => {
     if (!windowOpen) return;
 
-    onEditEntry(entry);
+    //onEditEntry(entry);
     setSelectedEntry(null);
-    navigate("/submit");
+    navigate(`/submit/${entry.id}`); //changed
   };
 
   const clearFilters = () => {
@@ -132,12 +124,15 @@ export default function MyEntries({
     setYearFilter("all");
   };
 
-  const handleDelete = () => {
+
+  const handleDelete = async () => { //changed
     if (!deleteTarget) return;
 
     const entryTitle = deleteTarget.titleOfActivities;
+    //onDeleteEntry?.(deleteTarget.id);
 
-    onDeleteEntry?.(deleteTarget.id);
+    await deleteEntry(deleteTarget, token);
+
     onShowToast?.({
       title: "Entry deleted",
       description: `${entryTitle} was removed from your entries.`,

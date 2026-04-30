@@ -1,4 +1,4 @@
-import * as entryService from '../services/entryService.js';
+import * as entryService from '../services/entriesService.js';
 import { isSubmissionWindowOpen } from '../utils/submissionWindow.js';
 
 export const getEntries = async (req, res) => {
@@ -21,20 +21,31 @@ export const deleteEntry = async (req, res) => {
 
 export const updateEntry = async (req, res) => {
   try {
-    const submissionWindow = req.body.submissionWindow;
+    if (!req.body) {
+      return res.status(400).json({ error: "Request body required" });
+    }
+
+    const { submissionWindow, titleOfActivities, ...rest } = req.body;
 
     if (!isSubmissionWindowOpen(submissionWindow)) {
       return res.status(403).json({ error: 'Editing closed' });
     }
 
-    const data = await entryService.updateEntry(
+    const updates = {
+      ...rest,
+      ...(titleOfActivities && { title_of_activities: titleOfActivities }),
+      ...(req.body.unitCost !== undefined && { unit_cost: req.body.unitCost }),
+      ...(req.body.planningYear && { planning_year: req.body.planningYear })
+    };
+
+    const data = await entryService.updateEntryById(
       req.params.id,
-      req.body,
+      updates,
       req.user.id
     );
 
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 };
