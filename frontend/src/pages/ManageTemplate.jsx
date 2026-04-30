@@ -4,22 +4,24 @@ import AdminDeleteTemplateItemModal from "@/components/admin/AdminDeleteTemplate
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-
-function cloneTemplateData(templateData) {
-  return JSON.parse(JSON.stringify(templateData));
-}
-
-function normalizeName(value) {
-  return String(value || "").trim();
-}
-
-function normalizeIndicatorNo(value) {
-  const trimmed = String(value || "").trim();
-  if (!trimmed) return "";
-
-  const numeric = Number(trimmed);
-  return Number.isNaN(numeric) ? trimmed : numeric;
-}
+import {
+  addComponent as addComponentToTemplate,
+  addIndicator as addIndicatorToTemplate,
+  addKeyActivity as addKeyActivityToTemplate,
+  addSubActivity as addSubActivityToTemplate,
+  addSubComponent as addSubComponentToTemplate,
+  deleteComponent as deleteComponentFromTemplate,
+  deleteIndicator as deleteIndicatorFromTemplate,
+  deleteKeyActivity as deleteKeyActivityFromTemplate,
+  deleteSubActivity as deleteSubActivityFromTemplate,
+  deleteSubComponent as deleteSubComponentFromTemplate,
+  renameComponent as renameComponentInTemplate,
+  renameKeyActivity as renameKeyActivityInTemplate,
+  renameSubComponent as renameSubComponentInTemplate,
+  saveIndicator as saveIndicatorInTemplate,
+  saveSubActivity as saveSubActivityInTemplate,
+} from "@/services/templateManagementService";
+import { normalizeIndicatorNo, normalizeName } from "@/services/templateService";
 
 const panelClass =
   "min-w-0 rounded-[1.75rem] border border-slate-200/80 bg-white shadow-[0_14px_34px_rgba(15,23,42,0.07)]";
@@ -258,8 +260,7 @@ export default function ManageTemplate({
   }, [selectedSubActivity]);
 
   const updateTemplate = (updater) => {
-    const nextTemplate = cloneTemplateData(templateData);
-    updater(nextTemplate);
+    const nextTemplate = updater(templateData);
     onUpdateTemplateData?.(nextTemplate);
   };
 
@@ -275,9 +276,7 @@ export default function ManageTemplate({
       return;
     }
 
-    updateTemplate((nextTemplate) => {
-      nextTemplate.hierarchy[name] = {};
-    });
+    updateTemplate((currentTemplate) => addComponentToTemplate(currentTemplate, name));
 
     setNewComponentName("");
     setSelectedComponent(name);
@@ -310,10 +309,9 @@ export default function ManageTemplate({
       return;
     }
 
-    updateTemplate((nextTemplate) => {
-      nextTemplate.hierarchy[nextName] = nextTemplate.hierarchy[selectedComponent];
-      delete nextTemplate.hierarchy[selectedComponent];
-    });
+    updateTemplate((currentTemplate) =>
+      renameComponentInTemplate(currentTemplate, selectedComponent, nextName),
+    );
 
     setSelectedComponent(nextName);
     setEditingComponentName("");
@@ -327,9 +325,9 @@ export default function ManageTemplate({
   const deleteComponent = () => {
     if (!deleteTarget || deleteTarget.kind !== "component") return;
 
-    updateTemplate((nextTemplate) => {
-      delete nextTemplate.hierarchy[deleteTarget.label];
-    });
+    updateTemplate((currentTemplate) =>
+      deleteComponentFromTemplate(currentTemplate, deleteTarget.label),
+    );
 
     onShowToast?.({
       title: "Component deleted",
@@ -352,9 +350,9 @@ export default function ManageTemplate({
       return;
     }
 
-    updateTemplate((nextTemplate) => {
-      nextTemplate.hierarchy[selectedComponent][name] = {};
-    });
+    updateTemplate((currentTemplate) =>
+      addSubComponentToTemplate(currentTemplate, selectedComponent, name),
+    );
 
     setNewSubComponentName("");
     setSelectedSubComponent(name);
@@ -385,11 +383,14 @@ export default function ManageTemplate({
       return;
     }
 
-    updateTemplate((nextTemplate) => {
-      const componentNode = nextTemplate.hierarchy[selectedComponent];
-      componentNode[nextName] = componentNode[selectedSubComponent];
-      delete componentNode[selectedSubComponent];
-    });
+    updateTemplate((currentTemplate) =>
+      renameSubComponentInTemplate(
+        currentTemplate,
+        selectedComponent,
+        selectedSubComponent,
+        nextName,
+      ),
+    );
 
     setSelectedSubComponent(nextName);
     onShowToast?.({
@@ -404,9 +405,13 @@ export default function ManageTemplate({
       return;
     }
 
-    updateTemplate((nextTemplate) => {
-      delete nextTemplate.hierarchy[selectedComponent][deleteTarget.label];
-    });
+    updateTemplate((currentTemplate) =>
+      deleteSubComponentFromTemplate(
+        currentTemplate,
+        selectedComponent,
+        deleteTarget.label,
+      ),
+    );
 
     onShowToast?.({
       title: "Sub component deleted",
@@ -429,9 +434,14 @@ export default function ManageTemplate({
       return;
     }
 
-    updateTemplate((nextTemplate) => {
-      nextTemplate.hierarchy[selectedComponent][selectedSubComponent][name] = [];
-    });
+    updateTemplate((currentTemplate) =>
+      addKeyActivityToTemplate(
+        currentTemplate,
+        selectedComponent,
+        selectedSubComponent,
+        name,
+      ),
+    );
 
     setNewKeyActivityName("");
     setSelectedKeyActivity(name);
@@ -461,12 +471,15 @@ export default function ManageTemplate({
       return;
     }
 
-    updateTemplate((nextTemplate) => {
-      const subComponentNode =
-        nextTemplate.hierarchy[selectedComponent][selectedSubComponent];
-      subComponentNode[nextName] = subComponentNode[selectedKeyActivity];
-      delete subComponentNode[selectedKeyActivity];
-    });
+    updateTemplate((currentTemplate) =>
+      renameKeyActivityInTemplate(
+        currentTemplate,
+        selectedComponent,
+        selectedSubComponent,
+        selectedKeyActivity,
+        nextName,
+      ),
+    );
 
     setSelectedKeyActivity(nextName);
     onShowToast?.({
@@ -486,9 +499,14 @@ export default function ManageTemplate({
       return;
     }
 
-    updateTemplate((nextTemplate) => {
-      delete nextTemplate.hierarchy[selectedComponent][selectedSubComponent][deleteTarget.label];
-    });
+    updateTemplate((currentTemplate) =>
+      deleteKeyActivityFromTemplate(
+        currentTemplate,
+        selectedComponent,
+        selectedSubComponent,
+        deleteTarget.label,
+      ),
+    );
 
     onShowToast?.({
       title: "Key activity deleted",
@@ -513,13 +531,16 @@ export default function ManageTemplate({
       return;
     }
 
-    updateTemplate((nextTemplate) => {
-      nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity].push({
-        no: nextNo,
-        performanceIndicator: nextText,
-        subActivities: [],
-      });
-    });
+    updateTemplate((currentTemplate) =>
+      addIndicatorToTemplate(
+        currentTemplate,
+        selectedComponent,
+        selectedSubComponent,
+        selectedKeyActivity,
+        nextNo,
+        nextText,
+      ),
+    );
 
     setNewIndicatorNo("");
     setNewIndicatorText("");
@@ -564,13 +585,18 @@ export default function ManageTemplate({
       return;
     }
 
-    updateTemplate((nextTemplate) => {
-      nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity][selectedIndicatorIndex] = {
-        no: nextNo,
-        performanceIndicator: nextText,
-        subActivities: selectedIndicator.subActivities || [],
-      };
-    });
+    updateTemplate((currentTemplate) =>
+      saveIndicatorInTemplate(
+        currentTemplate,
+        selectedComponent,
+        selectedSubComponent,
+        selectedKeyActivity,
+        selectedIndicatorIndex,
+        nextNo,
+        nextText,
+        selectedIndicator.subActivities || [],
+      ),
+    );
 
     onShowToast?.({
       title: "Indicator updated",
@@ -590,12 +616,15 @@ export default function ManageTemplate({
       return;
     }
 
-    updateTemplate((nextTemplate) => {
-      nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity].splice(
+    updateTemplate((currentTemplate) =>
+      deleteIndicatorFromTemplate(
+        currentTemplate,
+        selectedComponent,
+        selectedSubComponent,
+        selectedKeyActivity,
         deleteTarget.index,
-        1,
-      );
-    });
+      ),
+    );
 
     onShowToast?.({
       title: "Indicator deleted",
@@ -611,11 +640,16 @@ export default function ManageTemplate({
 
     if (!selectedIndicator || !nextText) return;
 
-    updateTemplate((nextTemplate) => {
-      const targetIndicator =
-        nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity][selectedIndicatorIndex];
-      targetIndicator.subActivities = [...(targetIndicator.subActivities || []), nextText];
-    });
+    updateTemplate((currentTemplate) =>
+      addSubActivityToTemplate(
+        currentTemplate,
+        selectedComponent,
+        selectedSubComponent,
+        selectedKeyActivity,
+        selectedIndicatorIndex,
+        nextText,
+      ),
+    );
 
     setNewSubActivityText("");
     setSelectedSubActivityIndex(subActivityItems.length);
@@ -634,11 +668,17 @@ export default function ManageTemplate({
 
     if (!selectedIndicator || !selectedSubActivity || !nextText) return;
 
-    updateTemplate((nextTemplate) => {
-      const targetIndicator =
-        nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity][selectedIndicatorIndex];
-      targetIndicator.subActivities[selectedSubActivityIndex] = nextText;
-    });
+    updateTemplate((currentTemplate) =>
+      saveSubActivityInTemplate(
+        currentTemplate,
+        selectedComponent,
+        selectedSubComponent,
+        selectedKeyActivity,
+        selectedIndicatorIndex,
+        selectedSubActivityIndex,
+        nextText,
+      ),
+    );
 
     onShowToast?.({
       title: "Sub activity updated",
@@ -656,11 +696,16 @@ export default function ManageTemplate({
       return;
     }
 
-    updateTemplate((nextTemplate) => {
-      const targetIndicator =
-        nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity][selectedIndicatorIndex];
-      targetIndicator.subActivities.splice(deleteTarget.index, 1);
-    });
+    updateTemplate((currentTemplate) =>
+      deleteSubActivityFromTemplate(
+        currentTemplate,
+        selectedComponent,
+        selectedSubComponent,
+        selectedKeyActivity,
+        selectedIndicatorIndex,
+        deleteTarget.index,
+      ),
+    );
 
     onShowToast?.({
       title: "Sub activity deleted",
