@@ -219,11 +219,11 @@ export default function AdminReview({
     };
 
     try {
-      // Save to Supabase
-      await entriesService.update(entryId, dbUpdates);
+      // Save to Supabase and capture the refreshed row
+      const updatedEntry = await entriesService.update(entryId, dbUpdates);
 
-      // Keep the local list (in App.jsx) in sync
-      onUpdateEntry?.(entryId, uiUpdates);
+      // Keep the local list (in App.jsx) in sync using the full entry row
+      onUpdateEntry?.(entryId, updatedEntry);
 
       onShowToast?.(successToast);
       setSelectedEntry(null);
