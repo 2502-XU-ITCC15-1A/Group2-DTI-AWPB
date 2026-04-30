@@ -13,7 +13,7 @@ export const getEntriesByUser = async (userId) => {
 };
 
 export const deleteEntryById = async (id, userId) => {
-  const { error } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('entries')
     .delete()
     .eq('id', id)
