@@ -1,7 +1,7 @@
 import { supabaseAdmin } from '../config/supabaseClient.js';
 
 export const getEntriesByUser = async (userId) => {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('entries')
     .select('*')
     .eq('owner_id', userId);

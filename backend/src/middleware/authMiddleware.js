@@ -19,7 +19,7 @@ export const authMiddleware = async (req, res, next) => {
       email: data.user.email
     };
 
-    const { data: profile } = await supabase
+    const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('role')
       .eq('id', data.user.id)

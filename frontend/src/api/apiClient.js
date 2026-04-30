@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase.js';
 const API_BASE = '/api';
 
 async function getAccessToken() {
-  const { data } = await supabase.auth.getSession();
+  const { data: {session} } = await supabase.auth.getSession();
   return data.session?.access_token;
 }
 

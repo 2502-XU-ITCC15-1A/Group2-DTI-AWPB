@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Search, Eye, Pencil, Lock, Trash2 } from "lucide-react";
 import EntryDetailsModal from "../components/entries/EntryDetailsModal";
 import AdminDeleteEntryModal from "../components/admin/AdminDeleteEntryModal";
-import { getEntries } from "../api/entries";
+import { getEntries, deleteEntry } from "../api/entries";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,10 +11,6 @@ import { Select, SelectContent, SelectItem,  SelectTrigger, SelectValue,} from "
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
-
-const [entries, setEntries] = useState([]);
-const [loading, setLoading] = useState(true);
-const [error, setError] = useState(null);
 
 function formatCurrency(value) {
   return new Intl.NumberFormat("en-PH", {
@@ -75,16 +71,38 @@ function isSubmissionWindowOpen(submissionWindow) {
 }
 
 export default function MyEntries({
-  entries = [],
+  //entries = [],
   onShowToast,
   submissionWindow,
 }) {
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [selectedEntry, setSelectedEntry] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("all");
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let ignore = false;
+
+    const loadEntries = async () => {
+      try {
+        setLoading(true);
+        const data = await getEntries();
+        if (!ignore) setEntries(data);
+      } catch (err) {
+        //console.error("Failed to load entries:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadEntries();
+    return () => {ignore = true;};
+  }, []);
 
   const windowOpen = isSubmissionWindowOpen(submissionWindow);
 
@@ -120,7 +138,7 @@ export default function MyEntries({
 
     //onEditEntry(entry);
     setSelectedEntry(null);
-    navigate(`/submit/${entry.id}`); //changed
+    navigate(`/submit/${entry.id}`);
   };
 
   const clearFilters = () => {
@@ -130,25 +148,40 @@ export default function MyEntries({
   };
 
 
-  const handleDelete = async () => { //changed
+  const handleDelete = async () => {
     if (!deleteTarget) return;
 
     const entryTitle = deleteTarget.titleOfActivities;
     //onDeleteEntry?.(deleteTarget.id);
 
-    await deleteEntry(deleteTarget.id);
-    onShowToast?.({
-      title: "Entry deleted",
-      description: `${entryTitle} was removed from your entries.`,
-      type: "success",
-    });
+    try{
+      await deleteEntry(deleteTarget.id);
+      setEntries((prev) => prev.filter((e) => e.id !== deleteTarget.id)); //add
 
-    if (selectedEntry?.id === deleteTarget.id) {
-      setSelectedEntry(null);
+      onShowToast?.({
+        title: "Entry deleted",
+        description: `${entryTitle} was removed from your entries.`,
+        type: "success",
+      });
+
+      if (selectedEntry?.id === deleteTarget.id) {
+        setSelectedEntry(null);
+      }
+      setDeleteTarget(null);
+
+    } catch(err){
+      console.error(err);
+      onShowToast?.({
+        title: "Delete failed",
+        description: err.message,
+        type: "error",
+      });
     }
-
-    setDeleteTarget(null);
   };
+
+  /*if (loading) {
+    return <div className="p-6 text-slate-500">Loading entries...</div>;
+  }*/
 
   return (
     <div className="space-y-6">
@@ -309,7 +342,7 @@ export default function MyEntries({
                         {entry.planningYear || "N/A"}
                       </td>
                       <td className="px-4 py-4 text-slate-700">
-                        {formatDate(entry.submittedAt)}
+                        {formatDate(entry.submission_date)}
                       </td>
 
                       <td className="px-4 py-4">
