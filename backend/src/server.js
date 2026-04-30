@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import cookieParser from 'cookie-parser';
 import entriesRoutes from './routes/entriesRoutes.js';
 
 const app = express();
@@ -15,13 +16,13 @@ dotenv.config({path: path.resolve(__dirname, '../.env')});
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 //for testing only
-app.use((req, res, next) => {
-  // bypass auth for testing entries
+/*app.use((req, res, next) => {
   req.user = { id: '2c7da4b9-85ce-44dd-a5e4-18a3cb73acf2', role: 'admin' };
   next();
-});
+});*/
 
 app.get('/api/health', (req, res) => {
   res.json({
@@ -42,7 +43,7 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`📦 Entries API: http://localhost:${PORT}/api/entries`);
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Health check: http://localhost:${PORT}/api/health`);
+  console.log(`Entries API: http://localhost:${PORT}/api/entries`);
 });

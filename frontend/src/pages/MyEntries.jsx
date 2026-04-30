@@ -1,15 +1,20 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, Eye, Pencil, Lock, Trash2 } from "lucide-react";
 import EntryDetailsModal from "../components/entries/EntryDetailsModal";
 import AdminDeleteEntryModal from "../components/admin/AdminDeleteEntryModal";
-import { deleteEntry } from "../api/entries";
+import { getEntries } from "../api/entries";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem,  SelectTrigger, SelectValue,} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+
+
+const [entries, setEntries] = useState([]);
+const [loading, setLoading] = useState(true);
+const [error, setError] = useState(null);
 
 function formatCurrency(value) {
   return new Intl.NumberFormat("en-PH", {
@@ -131,8 +136,7 @@ export default function MyEntries({
     const entryTitle = deleteTarget.titleOfActivities;
     //onDeleteEntry?.(deleteTarget.id);
 
-    await deleteEntry(deleteTarget, token);
-
+    await deleteEntry(deleteTarget.id);
     onShowToast?.({
       title: "Entry deleted",
       description: `${entryTitle} was removed from your entries.`,

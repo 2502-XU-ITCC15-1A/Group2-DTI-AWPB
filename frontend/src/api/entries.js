@@ -1,29 +1,18 @@
-export const getEntries = async (token) => {
-  const res = await fetch('/api/entries', {
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
-  });
-  return res.json();
+import { apiFetch } from './apiClient.js';
+
+export const getEntries = () => {
+  return apiFetch('/entries');
 };
 
-export const deleteEntry = async (id, token) => {
-  await fetch(`/api/entries/${id}`, {
-    method: 'DELETE',
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
+export const deleteEntry = (id) => {
+  return apiFetch(`/entries/${id}`, {
+    method: 'DELETE'
   });
 };
 
-export const updateEntry = async (id, data, token) => {
-  const res = await fetch(`/api/entries/${id}`, {
+export const updateEntry = (id, data) => {
+  return apiFetch(`/entries/${id}`, {
     method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
-    },
     body: JSON.stringify(data)
   });
-  return res.json();
 };

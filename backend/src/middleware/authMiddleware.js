@@ -1,22 +1,35 @@
-import { supabase } from '../config/supabaseClient.js';
-
+import { supabaseAuth, supabaseAdmin } from '../config/supabaseClient.js';
 
 export const authMiddleware = async (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1];
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
 
-  const { data, error } = await supabase.auth.getUser(token);
-
-  if (error) return res.status(401).json({ error: 'Unauthorized' });
-
-  req.user = data.user;
-  next();
-};
-
-export const requireRole = (role) => {
-  return (req, res, next) => {
-    if (req.user.role !== role) {
-      return res.status(403).json({ error: 'Forbidden' });
+    if (!token) {
+      return res.status(401).json({ error: 'Missing token' });
     }
+
+    const { data, error } = await supabaseAuth.auth.getUser(token);
+
+    if (error || !data?.user) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    req.user = {
+      id: data.user.id,
+      email: data.user.email
+    };
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', data.user.id)
+      .single();
+
+    req.user.role = profile?.role || 'encoder';
+
     next();
-  };
+  } catch (err) {
+    console.error('Auth error:', err);
+    res.status(500).json({ error: 'Authentication middleware failed' });
+  }
 };
