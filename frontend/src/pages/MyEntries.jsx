@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, Eye, Pencil, Lock, Trash2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 import EntryDetailsModal from "../components/entries/EntryDetailsModal";
 import AdminDeleteEntryModal from "../components/admin/AdminDeleteEntryModal";
@@ -28,7 +29,6 @@ function formatCurrency(value) {
 
 function formatDate(value) {
   if (!value) return "N/A";
-
   return new Date(value).toLocaleString("en-PH", {
     year: "numeric",
     month: "short",
@@ -40,7 +40,6 @@ function formatDate(value) {
 
 function formatDateOnly(value) {
   if (!value) return "N/A";
-
   return new Date(value).toLocaleDateString("en-PH", {
     year: "numeric",
     month: "long",
@@ -65,13 +64,10 @@ function getStatusBadgeVariant(status) {
 
 function isSubmissionWindowOpen(submissionWindow) {
   const { startDate, endDate } = submissionWindow || {};
-
   if (!startDate || !endDate) return false;
-
   const today = new Date();
   const start = new Date(`${startDate}T00:00:00`);
   const end = new Date(`${endDate}T23:59:59`);
-
   return today >= start && today <= end;
 }
 
@@ -87,20 +83,40 @@ export default function MyEntries({
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("all");
+  const [currentUserId, setCurrentUserId] = useState(null);
   const navigate = useNavigate();
+
+  // Get current logged-in user
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUserId(user?.id);
+    };
+    getCurrentUser();
+  }, []);
+
+  // Filter entries to only show current user's entries
+  const myEntries = useMemo(() => {
+    if (!currentUserId) return entries;
+    return entries.filter(entry => {
+      // Check both possible field names
+      const entryOwnerId = entry.ownerId || entry.owner_id;
+      return entryOwnerId === currentUserId;
+    });
+  }, [entries, currentUserId]);
 
   const windowOpen = isSubmissionWindowOpen(submissionWindow);
 
   const availableYears = useMemo(() => {
     return [
-      ...new Set(entries.map((entry) => entry.planningYear).filter(Boolean)),
+      ...new Set(myEntries.map((entry) => entry.planningYear).filter(Boolean)),
     ].sort((a, b) => String(b).localeCompare(String(a)));
-  }, [entries]);
+  }, [myEntries]);
 
   const filteredEntries = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
-    return entries.filter((entry) => {
+    return myEntries.filter((entry) => {
       const matchesSearch =
         normalizedSearch === "" ||
         entry.titleOfActivities?.toLowerCase().includes(normalizedSearch) ||
@@ -116,11 +132,10 @@ export default function MyEntries({
 
       return matchesSearch && matchesStatus && matchesYear;
     });
-  }, [entries, searchTerm, statusFilter, yearFilter]);
+  }, [myEntries, searchTerm, statusFilter, yearFilter]);
 
   const handleEdit = (entry) => {
     if (!windowOpen) return;
-
     onEditEntry(entry);
     setSelectedEntry(null);
     navigate("/submit");
@@ -134,20 +149,16 @@ export default function MyEntries({
 
   const handleDelete = () => {
     if (!deleteTarget) return;
-
     const entryTitle = deleteTarget.titleOfActivities;
-
     onDeleteEntry?.(deleteTarget.id);
     onShowToast?.({
       title: "Entry deleted",
       description: `${entryTitle} was removed from your entries.`,
       type: "success",
     });
-
     if (selectedEntry?.id === deleteTarget.id) {
       setSelectedEntry(null);
     }
-
     setDeleteTarget(null);
   };
 
@@ -179,7 +190,6 @@ export default function MyEntries({
                   {formatDateOnly(submissionWindow?.endDate)}
                 </p>
               </div>
-
               <Badge
                 variant="outline"
                 className="self-start border-rose-300 bg-white/40 text-rose-800 md:self-center"
@@ -200,7 +210,7 @@ export default function MyEntries({
                 Search and filter your submitted AWPB entries.
               </p>
               <p className="mt-6 text-sm text-slate-500">
-                Showing {filteredEntries.length} of {entries.length} entries
+                Showing {filteredEntries.length} of {myEntries.length} entries
               </p>
             </div>
 

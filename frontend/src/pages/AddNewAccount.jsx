@@ -41,110 +41,109 @@ export default function AddNewAccount({
       [name]: value,
     }));
   };
-//changes
+
   const handleCancel = () => {
-  navigate("/admin/manage-accounts");
-};
+    navigate("/admin/manage-accounts");
+  };
 
   const handleSave = async () => {
-  const nextErrors = {};
-  const normalizedUsername = form.username.trim().toLowerCase();
+    const nextErrors = {};
+    const normalizedUsername = form.username.trim().toLowerCase();
 
-  if (!normalizedUsername) {
-    nextErrors.username = "Username is required.";
-  } else if (!/^(enc|adm)_[a-z0-9_]+$/.test(normalizedUsername)) {
-    nextErrors.username =
-      "Use a username like enc_jdelacruz or adm_jdelacruz.";
-  } else if (
-    (form.role === "encoder" && !normalizedUsername.startsWith("enc_")) ||
-    (form.role === "admin" && !normalizedUsername.startsWith("adm_"))
-  ) {
-    nextErrors.username =
-      form.role === "encoder"
-        ? "Encoder accounts must use the enc_ prefix."
-        : "Admin accounts must use the adm_ prefix.";
-  } else if (
-    accounts.some((account) => account.username === normalizedUsername)
-  ) {
-    nextErrors.username =
-      "This username is already assigned to another account.";
-  }
+    if (!normalizedUsername) {
+      nextErrors.username = "Username is required.";
+    } else if (!/^(enc|adm)_[a-z0-9_]+$/.test(normalizedUsername)) {
+      nextErrors.username =
+        "Use a username like enc_jdelacruz or adm_jdelacruz.";
+    } else if (
+      (form.role === "encoder" && !normalizedUsername.startsWith("enc_")) ||
+      (form.role === "admin" && !normalizedUsername.startsWith("adm_"))
+    ) {
+      nextErrors.username =
+        form.role === "encoder"
+          ? "Encoder accounts must use the enc_ prefix."
+          : "Admin accounts must use the adm_ prefix.";
+    } else if (
+      accounts.some((account) => account.username === normalizedUsername)
+    ) {
+      nextErrors.username =
+        "This username is already assigned to another account.";
+    }
 
-  if (!form.fullName.trim()) {
-    nextErrors.fullName = "Full name is required.";
-  }
+    if (!form.fullName.trim()) {
+      nextErrors.fullName = "Full name is required.";
+    }
 
-  if (!form.email.trim()) {
-    nextErrors.email = "Email is required.";
-  }
+    if (!form.email.trim()) {
+      nextErrors.email = "Email is required.";
+    }
 
-  if (!form.password) {
-    nextErrors.password = "Password is required.";
-  } else if (form.password.length < 8) {
-    nextErrors.password = "Password must be at least 8 characters.";
-  }
+    if (!form.password) {
+      nextErrors.password = "Password is required.";
+    } else if (form.password.length < 8) {
+      nextErrors.password = "Password must be at least 8 characters.";
+    }
 
-  if (!form.confirmPassword) {
-    nextErrors.confirmPassword = "Please confirm the password.";
-  } else if (form.password !== form.confirmPassword) {
-    nextErrors.confirmPassword = "Passwords do not match.";
-  }
+    if (!form.confirmPassword) {
+      nextErrors.confirmPassword = "Please confirm the password.";
+    } else if (form.password !== form.confirmPassword) {
+      nextErrors.confirmPassword = "Passwords do not match.";
+    }
 
-  setErrors(nextErrors);
+    setErrors(nextErrors);
 
-  if (Object.keys(nextErrors).length === 0) {
-    const createdName = form.fullName.trim();
+    if (Object.keys(nextErrors).length === 0) {
+      const createdName = form.fullName.trim();
 
-    // CREATE AUTH USER (changes)
-     const { data: authData, error: authError } =
-      await supabase.auth.signUp({
+      // CREATE AUTH USER
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: form.email,
         password: form.password,
       });
 
-    if (authError) {
-      setErrors({ email: authError.message });
-      return;
-    }
+      if (authError) {
+        setErrors({ email: authError.message });
+        return;
+      }
 
-    const userId = authData.user?.id;
+      const userId = authData.user?.id;
 
-    // INSERT INTO DATABASE TABLE (changes)
-    const { error: dbError } = await supabase.from("profiles").insert([
-      {
+      // INSERT INTO DATABASE TABLE
+      const { error: dbError } = await supabase.from("profiles").insert([
+        {
+          id: userId,
+          username: normalizedUsername,
+          full_name: form.fullName.trim(),
+          email: form.email.trim(),
+          role: form.role,
+          status: "active",
+        },
+      ]);
+
+      if (dbError) {
+        setErrors({ email: dbError.message });
+        return;
+      }
+
+      onAddAccount?.({
         id: userId,
-        username: normalizedUsername, // example: enc_jdelacruz
-        full_name: form.fullName.trim(),
+        username: normalizedUsername,
+        fullName: form.fullName.trim(),
         email: form.email.trim(),
         role: form.role,
         status: "active",
-      },
-    ]);
+      });
 
-    if (dbError) {
-      setErrors({ email: dbError.message });
-      return;
+      onShowToast?.({
+        title: "Account created",
+        description: `${createdName} was added to All Accounts.`,
+        type: "success",
+      });
+
+      navigate("/admin/manage-accounts");
     }
+  };
 
-    // KEEP ORIGINAL UI LOGIC (changes)
-    onAddAccount?.({
-      id: userId,
-      username: normalizedUsername,
-      fullName: form.fullName.trim(),
-      email: form.email.trim(),
-      role: form.role,
-      status: "active",
-    });
-
-    onShowToast?.({
-      title: "Account created",
-      description: `${createdName} was added to All Accounts.`,
-      type: "success",
-    });
-
-    navigate("/admin/manage-accounts");
-  }
-};
   return (
     <div className="space-y-6">
       <div>
