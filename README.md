@@ -7,18 +7,6 @@ An Annual Work and Budget Plan (AWPB) management system for the DTI RAPID Growth
 
 The AWPB System is a web-based application that allows encoders to submit annual work and budget plans, and administrators to review, approve, or return submissions. The system manages complex hierarchical templates, monthly budget breakdowns, and user access control.
 
-## Tech Stack
-
-| Technology | Purpose |
-|------------|---------|
-| **React 19** | Frontend framework |
-| **Vite** | Build tool and dev server |
-| **Tailwind CSS** | Styling and UI components |
-| **shadcn/ui** | UI component library |
-| **Supabase** | Backend-as-a-Service (Auth + Database) |
-| **React Hook Form** | Form management |
-| **React Router DOM** | Routing and navigation |
-| **Lucide React** | Icons |
 
 ## Project Status
 
