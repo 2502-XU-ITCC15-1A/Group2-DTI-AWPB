@@ -56,10 +56,6 @@ The AWPB System is a web-based application that allows encoders to submit annual
 - ✅ View dashboard with budget summaries and statistics
 - ✅ Filter entries by status, unit, and year
 
-## Architecture
-
-
-<img width="572" height="556" alt="image" src="https://github.com/user-attachments/assets/84d8e119-0428-4c40-9422-302727f875eb" />
 
 
 text
