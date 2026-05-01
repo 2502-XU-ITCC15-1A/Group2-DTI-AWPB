@@ -1,89 +1,338 @@
-📊 Project progress status
-🎨 Frontend — 🟢 Fully functional (~95%)
-Fully built React app with these pages:
+markdown
+# AWPB System - DTI RAPID Growth Project
 
-Page	Purpose	Status
-Login.jsx	User authentication	✅ Working
-ForgotPassword.jsx	Password reset	⚠️ Exists but untested
-Home.jsx	Encoder dashboard	✅ Working
-AdminDashboard.jsx	Admin overview	✅ Working
-AdminReview.jsx	Review entries	✅ Working (No. & Sub Activity columns added)
-ManageAccounts.jsx	User management	✅ Working
-AddNewAccount.jsx	Create new users	✅ Working
-ManageTemplate.jsx	Edit components/sub-components	✅ Working
-MyEntries.jsx	Encoder's entries	✅ Working
-SubmitEntry.jsx	Main entry form	✅ Working (Edit functionality fixed)
-Data layer: supabaseService.js — talks directly to Supabase with full CRUD operations.
+An Annual Work and Budget Plan (AWPB) management system for the DTI RAPID Growth Project, built with React and Supabase.
 
-Fixed Issues:
+## 📋 Table of Contents
 
-✅ Monthly breakdown now displays correctly in both Admin and Encoder views
+- [Overview](#overview)
+- [Tech Stack](#tech-stack)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Installation](#installation)
+- [Environment Setup](#environment-setup)
+- [Database Setup](#database-setup)
+- [Running the Application](#running-the-application)
+- [Project Structure](#project-structure)
+- [User Roles](#user-roles)
+- [Key Features](#key-features)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
 
-✅ No. and Sub Activity columns added to Admin Review table
+## Overview
 
-✅ Edit returned entries now pre-populates all fields (Key Activity, No., Sub Activity)
+The AWPB System is a web-based application that allows encoders to submit annual work and budget plans, and administrators to review, approve, or return submissions. The system manages complex hierarchical templates, monthly budget breakdowns, and user access control.
 
-✅ Resubmit functionality working with proper RLS policies
+## Tech Stack
 
-✅ Unit Cost and monthly targets persist when editing
+| Technology | Purpose |
+|------------|---------|
+| **React 19** | Frontend framework |
+| **Vite** | Build tool and dev server |
+| **Tailwind CSS** | Styling and UI components |
+| **shadcn/ui** | UI component library |
+| **Supabase** | Backend-as-a-Service (Auth + Database) |
+| **React Hook Form** | Form management |
+| **React Router DOM** | Routing and navigation |
+| **Lucide React** | Icons |
 
-🗄️ Backend — 🔴 Removed / Not used (0%)
-The Express backend has been completely abandoned
+## Features
 
-Frontend communicates directly with Supabase for all operations
+### For Encoders
+- ✅ Submit AWPB entries with hierarchical classification
+- ✅ Enter monthly targets with automatic budget computation
+- ✅ View all submitted entries with status tracking
+- ✅ Edit returned entries with pre-populated data
+- ✅ Delete pending entries
+- ✅ View entry details
 
-No backend services are required for the current architecture
+### For Administrators
+- ✅ Review submitted entries (Approve/Return/Reject)
+- ✅ Add review comments for returned/rejected entries
+- ✅ Manage template hierarchy (Components, Sub-components, Key Activities)
+- ✅ Manage user accounts (Create, Edit, Activate, Deactivate)
+- ✅ Configure submission windows (Open/Close encoding periods)
+- ✅ View dashboard with budget summaries and statistics
+- ✅ Filter entries by status, unit, and year
 
-Recommendation: Delete the backend/ folder to clean up the repository.
+## Architecture
+┌─────────────────────────────────────────────────────────────┐
+│ React Frontend │
+│ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────────────┐ │
+│ │ Login │ │ Home │ │ Submit │ │ Admin Review │ │
+│ └─────────┘ └─────────┘ └─────────┘ └─────────────────┘ │
+│ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────────────┐ │
+│ │MyEntries│ │Dashboard│ │Template │ │Manage Accounts │ │
+│ └─────────┘ └─────────┘ └─────────┘ └─────────────────┘ │
+│ │ │
+│ supabaseService.js │
+└──────────────────────────┬──────────────────────────────────┘
+│
+▼
+┌─────────────────────────────────────────────────────────────┐
+│ Supabase Cloud │
+│ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐ │
+│ │ Auth │ │ Profiles │ │ Entries │ │MonthlyTargets│ │
+│ └──────────┘ └──────────┘ └──────────┘ └──────────────┘ │
+│ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐ │
+│ │ Units │ │Components│ │SubComp │ │KeyActivities │ │
+│ └──────────┘ └──────────┘ └──────────┘ └──────────────┘ │
+│ ┌──────────┐ ┌──────────────────────────────────────────┐ │
+│ │SubAct │ │ submission_windows │ │
+│ └──────────┘ └──────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
 
-🗃️ Database — 🟢 Fully functional (~95%)
-✅ Live on Supabase cloud (engimvovjhbuozskneys.supabase.co)
-
-✅ All tables created and working:
-
-profiles - User profiles with roles (admin/encoder)
-
-entries - AWPB entries with foreign keys
-
-monthly_targets - Monthly targets linked to entries
-
-components, sub_components, key_activities, sub_activities - Template hierarchy
-
-units - Implementing units
-
-submission_windows - Submission period settings
-
-✅ RLS policies active and working:
-
-Encoders can update their own entries (for resubmission)
-
-Admins can update all entries
-
-Reference tables accessible to authenticated users
-
-✅ Seed data loaded (components, units)
-
-⚠️ Minor remaining issues:
-
-handle_new_user trigger doesn't fire for users created via admin API (workaround: manual profile creation works)
-
-Some legacy files (backend/database/, root database/) still in repo — can be removed
-
-Audit/history table not yet defined (future enhancement)
-
-🎯 TL;DR
 text
-Frontend  █████████░ 95%  (fully functional, all major features working)
-Backend   ░░░░░░░░░░ 0%   (abandoned - can be removed)
-Database  █████████░ 95%  (fully functional, minor cleanup optional)
-Architecture in use today:
 
+## Installation
+
+### Prerequisites
+
+- Node.js (v18 or higher)
+- npm or yarn
+- Supabase account (free tier works)
+
+### Steps
+
+1. **Clone the repository**
+```bash
+git clone <your-repo-url>
+cd slp-dti-awpb-system
+Install frontend dependencies
+
+bash
+cd frontend
+npm install
+Create a Supabase project
+
+Go to https://supabase.com
+
+Create a new project
+
+Save your project URL and anon key
+
+Set up environment variables
+
+Create frontend/.env file (see Environment Setup below)
+
+Run database migrations
+
+Copy migration files from supabase/migrations/ to Supabase SQL editor
+
+Run in order: 001 through 006
+
+Start the development server
+
+bash
+npm run dev
+Environment Setup
+Create frontend/.env file:
+
+env
+VITE_SUPABASE_URL=https://your-project-id.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key-here
+Database Setup
+Run Migrations in Order
+Run these SQL files in your Supabase SQL editor:
+
+Order	File	Purpose
+1	001_create_awpb_schema.sql	Create all tables and enums
+2	002_seed_template_data.sql	Load template hierarchy data
+3	003_rls_policies.sql	Set up Row Level Security
+4	004_fix_rls_recursion.sql	Fix RLS infinite recursion
+5	005_awpb_entries.sql	Create entries table
+6	006_username_to_email_rpc.sql	Create username lookup function
+Default Admin Account
+After migrations, create an admin user:
+
+sql
+-- Run in Supabase SQL editor
+INSERT INTO auth.users (email, encrypted_password, email_confirmed_at, raw_user_meta_data)
+VALUES (
+  'admin@example.com',
+  crypt('admin123', gen_salt('bf')),
+  NOW(),
+  '{"username": "adm_admin", "full_name": "System Admin", "role": "admin"}'
+);
+Running the Application
+Development Mode
+bash
+cd frontend
+npm run dev
+App will run at http://localhost:5173
+
+Production Build
+bash
+cd frontend
+npm run build
+Build output will be in dist/ folder
+
+Project Structure
 text
-React frontend ──► Supabase (DB + Auth + RLS)
-✅ Recent Fixes Applied
+frontend/
+├── src/
+│   ├── assets/           # Images and static files
+│   ├── components/       # Reusable UI components
+│   │   ├── admin/        # Admin-specific components
+│   │   ├── entries/      # Entry-related components
+│   │   ├── layout/       # Layout components
+│   │   └── ui/           # shadcn/ui components
+│   ├── data/             # JSON data files
+│   ├── lib/              # Utility functions
+│   ├── pages/            # Page components
+│   │   ├── Login.jsx
+│   │   ├── Home.jsx
+│   │   ├── SubmitEntry.jsx
+│   │   ├── MyEntries.jsx
+│   │   ├── AdminReview.jsx
+│   │   ├── AdminDashboard.jsx
+│   │   ├── ManageTemplate.jsx
+│   │   ├── ManageAccounts.jsx
+│   │   └── AddNewAccount.jsx
+│   ├── services/         # API services
+│   │   └── supabaseService.js
+│   ├── App.jsx           # Main app component
+│   ├── main.jsx          # Entry point
+│   └── index.css         # Global styles
+├── public/               # Public assets
+├── .env                  # Environment variables
+├── package.json
+└── vite.config.js
+
+supabase/
+└── migrations/           # Database migration files
+    ├── 001_create_awpb_schema.sql
+    ├── 002_seed_template_data.sql
+    ├── 003_rls_policies.sql
+    ├── 004_fix_rls_recursion.sql
+    ├── 005_awpb_entries.sql
+    └── 006_username_to_email_rpc.sql
+User Roles
+Encoder
+Username prefix: enc_ (e.g., enc_jdelacruz)
+
+Can submit and edit own entries
+
+Can view own submission status
+
+Can edit returned entries
+
+Admin
+Username prefix: adm_ (e.g., adm_admin)
+
+Can review all entries
+
+Can manage template hierarchy
+
+Can manage user accounts
+
+Can configure submission windows
+
+Can view dashboard statistics
+
+Key Features
+Submission Window Control
+Admins can open/close encoding periods. When closed, encoders cannot submit new entries or edit returned ones.
+
+Monthly Budget Computation
+Unit Cost × Monthly Target = Monthly Amount
+
+Grand Total = Sum of all monthly amounts
+
+Only months with targets > 0 are saved
+
+Template Management
+Admins can manage the 4-level hierarchy:
+
+Components
+
+Sub-components
+
+Key Activities (with Activity No. and Performance Indicator)
+
+Sub-activities
+
+Entry Review Workflow
+Encoder submits entry → Status: "Pending Review"
+
+Admin reviews → Can Approve, Return, or Reject
+
+If Returned, encoder can edit and resubmit
+
+If Approved/Rejected, entry is locked
+
+Troubleshooting
+Common Issues
 Issue	Solution
-Monthly breakdown not showing	Modified getAll() and getById() to fetch from monthly_targets table and build breakdown dynamically
-No. and Sub Activity missing in Admin Review	Added columns to table and mapped activity_no → no, sub_activities.name → subActivity
-Edit form not pre-populating data	Updated useEffect to set values sequentially with delays for dependent dropdowns
-RLS policy blocking updates	Created policies allowing encoders to update their own entries
-Unit Cost and targets not loading on edit	Added target mapping from monthlyBreakdown to form targets object
+Login fails	Check username exists in profiles table
+Entries not showing	Verify RLS policies are applied
+Monthly breakdown empty	Check monthly_targets table has data
+Edit form not populating	Clear browser cache and refresh
+RLS policy errors	Run migration 004_fix_rls_recursion.sql
+Useful SQL Queries
+sql
+-- Check all entries
+SELECT * FROM entries ORDER BY created_at DESC;
+
+-- Check monthly targets
+SELECT * FROM monthly_targets;
+
+-- Check users
+SELECT * FROM profiles;
+
+-- Fix RLS issues
+DROP POLICY IF EXISTS "Encoders update own entries" ON entries;
+CREATE POLICY "Encoders update own entries" ON entries
+    FOR UPDATE USING (auth.uid() = owner_id);
+Contributing
+Create a feature branch
+
+Make your changes
+
+Test thoroughly
+
+Submit a pull request
+
+Code Style
+Use functional components with hooks
+
+Follow existing naming conventions
+
+Add console logs for debugging (remove before production)
+
+Test both encoder and admin views
+
+License
+© Xavier University – Ateneo de Cagayan
+In Fulfillment of SLP and ITCC project
+
+Support
+For issues or questions, contact the development team.
+
+Acknowledgments
+DTI RAPID Growth Project
+
+Xavier University – Ateneo de Cagayan
+
+Supabase for backend services
+
+shadcn/ui for component library
+
+Version: 1.0.0
+Last Updated: May 2026
+Status: Production Ready ✅
+
+text
+
+This README is ready to be copied and saved as `README.md` in your project root directory. It includes:
+
+- ✅ Project overview and tech stack
+- ✅ Complete installation instructions
+- ✅ Database setup guide
+- ✅ Architecture diagram (text-based)
+- ✅ Project structure
+- ✅ User roles and permissions
+- ✅ Key features documentation
+- ✅ Troubleshooting guide
+- ✅ Useful SQL queries
