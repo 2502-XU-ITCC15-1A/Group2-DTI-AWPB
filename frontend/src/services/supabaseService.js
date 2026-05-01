@@ -114,29 +114,51 @@ export const usersService = {
 
 // Entry management services
 export const entriesService = {
-  transformEntry(row) {
+  getMonthName(monthCode) {
+    const months = {
+      'jan': 'January',
+      'feb': 'February',
+      'mar': 'March',
+      'apr': 'April',
+      'may': 'May',
+      'jun': 'June',
+      'jul': 'July',
+      'aug': 'August',
+      'sep': 'September',
+      'oct': 'October',
+      'nov': 'November',
+      'dec': 'December'
+    };
+    return months[monthCode?.toLowerCase()] || monthCode;
+  },
+
+  transformEntryWithJoins(row, monthlyBreakdown = []) {
     if (!row) return row;
+    
+    // Calculate grand total from monthly breakdown
+    const grandTotal = monthlyBreakdown.reduce((sum, m) => sum + (m.amount || 0), 0);
+    
     return {
       id: row.id,
       ownerId: row.owner_id,
-      ownerUsername: row.owner_username,
-      ownerFullName: row.owner_full_name,
+      ownerUsername: row.profiles?.username || '',
+      ownerFullName: row.profiles?.full_name || '',
       planningYear: row.planning_year,
-      unit: row.unit,
-      component: row.component,
-      subComponent: row.sub_component,
-      keyActivity: row.key_activity,
-      no: row.no,
-      performanceIndicator: row.performance_indicator || '',
-      subActivity: row.sub_activity || '',
+      unit: row.units?.name || '',
+      component: row.components?.name || '',
+      subComponent: row.sub_components?.name || '',
+      keyActivity: row.key_activities?.name || '',
+      no: row.key_activities?.activity_no || '',
+      performanceIndicator: row.key_activities?.performance_indicator || '',
+      subActivity: row.sub_activities?.name || '',
       titleOfActivities: row.title_of_activities,
       unitCost: Number(row.unit_cost) || 0,
-      monthlyBreakdown: row.monthly_breakdown || [],
-      grandTotal: Number(row.grand_total) || 0,
+      monthlyBreakdown: monthlyBreakdown,
+      grandTotal: grandTotal,
       status: row.status,
       adminComment: row.reviewer_notes || '',
-      submittedAt: row.submitted_at,
-      reviewedAt: row.reviewed_at,
+      submittedAt: row.submission_date,
+      reviewedAt: row.review_date,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -146,9 +168,17 @@ export const entriesService = {
     const { data: { user } } = await supabase.auth.getUser();
     
     let query = supabase
-      .from('admin_entry_view')
-      .select('*')
-      .order('submitted_at', { ascending: false });
+      .from('entries')
+      .select(`
+        *,
+        profiles!owner_id (username, full_name),
+        units (name),
+        components (name),
+        sub_components (name),
+        key_activities (name, activity_no, performance_indicator),
+        sub_activities (name)
+      `)
+      .order('created_at', { ascending: false });
 
     const profile = await authService.getProfile(user.id);
     if (profile.role !== 'admin') {
@@ -161,185 +191,130 @@ export const entriesService = {
       throw error;
     }
     
-    return (data || []).map(row => this.transformEntry(row));
+    // For each entry, fetch its monthly targets
+    const entriesWithBreakdown = await Promise.all(
+      (data || []).map(async (row) => {
+        // Fetch monthly targets for this entry
+        const { data: monthlyTargets } = await supabase
+          .from('monthly_targets')
+          .select('month, target_quantity')
+          .eq('entry_id', row.id);
+        
+        // Build monthly breakdown
+        const monthlyBreakdown = (monthlyTargets || [])
+          .filter(mt => mt.target_quantity > 0)
+          .map(mt => ({
+            month: this.getMonthName(mt.month),
+            target: mt.target_quantity,
+            amount: mt.target_quantity * (row.unit_cost || 0)
+          }));
+        
+        return this.transformEntryWithJoins(row, monthlyBreakdown);
+      })
+    );
+    
+    return entriesWithBreakdown;
   },
 
   async getById(id) {
     const { data, error } = await supabase
-      .from('admin_entry_view')
-      .select('*')
+      .from('entries')
+      .select(`
+        *,
+        profiles!owner_id (username, full_name),
+        units (name),
+        components (name),
+        sub_components (name),
+        key_activities (name, activity_no, performance_indicator),
+        sub_activities (name)
+      `)
       .eq('id', id)
       .single();
     if (error) throw error;
-    return this.transformEntry(data);
+    
+    // Fetch monthly targets for this entry
+    const { data: monthlyTargets } = await supabase
+      .from('monthly_targets')
+      .select('month, target_quantity')
+      .eq('entry_id', id);
+    
+    const monthlyBreakdown = (monthlyTargets || [])
+      .filter(mt => mt.target_quantity > 0)
+      .map(mt => ({
+        month: this.getMonthName(mt.month),
+        target: mt.target_quantity,
+        amount: mt.target_quantity * (data.unit_cost || 0)
+      }));
+    
+    return this.transformEntryWithJoins(data, monthlyBreakdown);
   },
 
   async create(entryData) {
     const { data: { user } } = await supabase.auth.getUser();
-    const profile = await authService.getProfile(user.id);
     
     console.log("=== CREATING ENTRY ===");
     console.log("Entry data received:", entryData);
     
-    // Step 1: Get or find unit ID
-    let unitId = null;
-    const unitName = entryData.unit;
-    
-    if (!unitName) {
-      throw new Error('Unit is required');
-    }
-    
-    // Try to find unit by exact name match
-    const { data: unitData, error: unitError } = await supabase
-      .from('units')
-      .select('id, name, code')
-      .eq('name', unitName)
-      .maybeSingle();
-    
-    if (unitData) {
-      unitId = unitData.id;
-      console.log("Found unit by name:", unitData.name, unitId);
-    } else {
-      // Try to find by code
-      const { data: unitByCode } = await supabase
+    // Helper function to find ID by name
+    const findUnitId = async (name) => {
+      const { data } = await supabase
         .from('units')
-        .select('id, name, code')
-        .eq('code', unitName)
+        .select('id')
+        .eq('name', name)
         .maybeSingle();
-      
-      if (unitByCode) {
-        unitId = unitByCode.id;
-        console.log("Found unit by code:", unitByCode.name, unitId);
-      } else {
-        // Try partial match
-        const { data: allUnits } = await supabase
-          .from('units')
-          .select('id, name, code');
-        
-        const partialMatch = allUnits?.find(u => 
-          unitName.toLowerCase().includes(u.name.toLowerCase()) ||
-          u.name.toLowerCase().includes(unitName.toLowerCase()) ||
-          unitName.toLowerCase().includes(u.code.toLowerCase())
-        );
-        
-        if (partialMatch) {
-          unitId = partialMatch.id;
-          console.log("Found unit by partial match:", partialMatch.name, unitId);
-        } else {
-          console.error("Unit not found:", unitName);
-          throw new Error(`Unit not found: "${unitName}". Please select a valid unit.`);
-        }
-      }
-    }
+      return data?.id;
+    };
     
-    // Step 2: Get component ID
-    let componentId = null;
-    const { data: componentData } = await supabase
-      .from('components')
-      .select('id')
-      .eq('name', entryData.component)
-      .maybeSingle();
-    
-    if (componentData) {
-      componentId = componentData.id;
-      console.log("Found component:", componentData.name, componentId);
-    } else {
-      // Try partial match for component
-      const { data: allComponents } = await supabase
+    const findComponentId = async (name) => {
+      const { data } = await supabase
         .from('components')
-        .select('id, name');
-      
-      const partialMatch = allComponents?.find(c => 
-        entryData.component.toLowerCase().includes(c.name.toLowerCase()) ||
-        c.name.toLowerCase().includes(entryData.component.toLowerCase())
-      );
-      
-      if (partialMatch) {
-        componentId = partialMatch.id;
-        console.log("Found component by partial match:", partialMatch.name);
-      } else {
-        throw new Error(`Component not found: ${entryData.component}`);
-      }
-    }
+        .select('id')
+        .eq('name', name)
+        .maybeSingle();
+      return data?.id;
+    };
     
-    // Step 3: Get sub-component ID
-    let subComponentId = null;
-    const { data: subComponentData } = await supabase
-      .from('sub_components')
-      .select('id')
-      .eq('name', entryData.subComponent)
-      .maybeSingle();
-    
-    if (subComponentData) {
-      subComponentId = subComponentData.id;
-      console.log("Found sub-component:", subComponentData.name, subComponentId);
-    } else {
-      // Try partial match for sub-component
-      const { data: allSubComponents } = await supabase
+    const findSubComponentId = async (name) => {
+      const { data } = await supabase
         .from('sub_components')
-        .select('id, name');
-      
-      const partialMatch = allSubComponents?.find(sc => 
-        entryData.subComponent.toLowerCase().includes(sc.name.toLowerCase()) ||
-        sc.name.toLowerCase().includes(entryData.subComponent.toLowerCase())
-      );
-      
-      if (partialMatch) {
-        subComponentId = partialMatch.id;
-        console.log("Found sub-component by partial match:", partialMatch.name);
-      } else {
-        throw new Error(`Sub-component not found: ${entryData.subComponent}`);
-      }
-    }
+        .select('id')
+        .eq('name', name)
+        .maybeSingle();
+      return data?.id;
+    };
     
-    // Step 4: Get key activity ID
-    let keyActivityId = null;
-    const { data: keyActivityData } = await supabase
-      .from('key_activities')
-      .select('id')
-      .eq('name', entryData.keyActivity)
-      .maybeSingle();
-    
-    if (keyActivityData) {
-      keyActivityId = keyActivityData.id;
-      console.log("Found key activity:", keyActivityData.name, keyActivityId);
-    } else {
-      // Try partial match for key activity
-      const { data: allKeyActivities } = await supabase
+    const findKeyActivityId = async (name) => {
+      const { data } = await supabase
         .from('key_activities')
-        .select('id, name');
-      
-      const partialMatch = allKeyActivities?.find(ka => 
-        entryData.keyActivity.toLowerCase().includes(ka.name.toLowerCase()) ||
-        ka.name.toLowerCase().includes(entryData.keyActivity.toLowerCase())
-      );
-      
-      if (partialMatch) {
-        keyActivityId = partialMatch.id;
-        console.log("Found key activity by partial match:", partialMatch.name);
-      } else {
-        throw new Error(`Key activity not found: ${entryData.keyActivity}`);
-      }
-    }
+        .select('id')
+        .eq('name', name)
+        .maybeSingle();
+      return data?.id;
+    };
     
-    // Step 5: Get sub-activity ID if provided
-    let subActivityId = null;
-    if (entryData.subActivity && entryData.subActivity !== '' && entryData.subActivity !== 'N/A' && entryData.subActivity !== 'Select sub activity') {
-      console.log("Looking for sub-activity:", entryData.subActivity);
-      
-      const { data: subActivityData } = await supabase
+    const findSubActivityId = async (name) => {
+      if (!name || name === 'N/A' || name === 'Select sub activity' || name === '') return null;
+      const { data } = await supabase
         .from('sub_activities')
         .select('id')
-        .eq('name', entryData.subActivity)
+        .eq('name', name)
         .maybeSingle();
-      
-      if (subActivityData) {
-        subActivityId = subActivityData.id;
-        console.log("Found sub-activity:", entryData.subActivity, "ID:", subActivityId);
-      }
-    }
+      return data?.id;
+    };
     
-    // Step 6: Insert the entry
+    // Get all IDs
+    const unitId = await findUnitId(entryData.unit);
+    const componentId = await findComponentId(entryData.component);
+    const subComponentId = await findSubComponentId(entryData.subComponent);
+    const keyActivityId = await findKeyActivityId(entryData.keyActivity);
+    const subActivityId = await findSubActivityId(entryData.subActivity);
+    
+    if (!unitId) throw new Error(`Unit not found: ${entryData.unit}`);
+    if (!componentId) throw new Error(`Component not found: ${entryData.component}`);
+    if (!subComponentId) throw new Error(`Sub-component not found: ${entryData.subComponent}`);
+    if (!keyActivityId) throw new Error(`Key activity not found: ${entryData.keyActivity}`);
+    
+    // Insert entry
     const insertData = {
       owner_id: user.id,
       unit_id: unitId,
@@ -353,7 +328,6 @@ export const entriesService = {
       submission_date: new Date().toISOString(),
     };
     
-    // Add sub_activity_id if found
     if (subActivityId) {
       insertData.sub_activity_id = subActivityId;
     }
@@ -373,21 +347,10 @@ export const entriesService = {
     
     console.log("Entry created with ID:", data.id);
     
-    // Step 7: Insert monthly targets
+    // Insert monthly targets
     if (entryData.monthlyBreakdown && entryData.monthlyBreakdown.length > 0) {
       console.log("Inserting monthly targets:", entryData.monthlyBreakdown);
       
-      // Delete any existing monthly targets for this entry (in case of resubmission)
-      const { error: deleteError } = await supabase
-        .from('monthly_targets')
-        .delete()
-        .eq('entry_id', data.id);
-      
-      if (deleteError) {
-        console.error("Error deleting existing monthly targets:", deleteError);
-      }
-      
-      // Insert new monthly targets
       for (const month of entryData.monthlyBreakdown) {
         if (month.target && month.target > 0) {
           const monthName = month.month.toLowerCase().slice(0, 3);
@@ -403,40 +366,28 @@ export const entriesService = {
           
           if (mtError) {
             console.error(`Error inserting monthly target for ${monthName}:`, mtError);
-          } else {
-            console.log(`Successfully inserted ${monthName}: ${month.target}`);
           }
         }
       }
-    } else {
-      console.warn("No monthly breakdown found in entryData!");
     }
     
-    // Return the created entry with all joined data
     return await this.getById(data.id);
   },
 
   async update(id, updates) {
     const dbUpdates = {};
     
-    // Map frontend field names to actual database column names
     if (updates.status !== undefined) dbUpdates.status = updates.status;
     if (updates.review_date !== undefined) dbUpdates.review_date = updates.review_date;
     if (updates.titleOfActivities !== undefined) dbUpdates.title_of_activities = updates.titleOfActivities;
     if (updates.unitCost !== undefined) dbUpdates.unit_cost = updates.unitCost;
-    
-    // Map adminComment (from frontend) to reviewer_notes (database column)
     if (updates.adminComment !== undefined) dbUpdates.reviewer_notes = updates.adminComment;
-    if (updates.reviewer_notes !== undefined) dbUpdates.reviewer_notes = updates.reviewer_notes;
     
-    // Update entries table if there are changes
     if (Object.keys(dbUpdates).length > 0) {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('entries')
         .update(dbUpdates)
-        .eq('id', id)
-        .select()
-        .single();
+        .eq('id', id);
         
       if (error) {
         console.error('Update error:', error);
@@ -446,35 +397,20 @@ export const entriesService = {
     
     // Update monthly targets if provided
     if (updates.monthlyBreakdown && updates.monthlyBreakdown.length > 0) {
-      console.log("Updating monthly targets for entry:", id);
-      
-      // Delete existing targets first
-      const { error: deleteError } = await supabase
-        .from('monthly_targets')
-        .delete()
-        .eq('entry_id', id);
-      
-      if (deleteError) {
-        console.error("Error deleting existing monthly targets:", deleteError);
-      }
+      // Delete existing targets
+      await supabase.from('monthly_targets').delete().eq('entry_id', id);
       
       // Insert new targets
       for (const month of updates.monthlyBreakdown) {
         if (month.target > 0) {
           const monthName = month.month.toLowerCase().slice(0, 3);
-          console.log(`Inserting ${monthName}: ${month.target}`);
-          
-          const { error: mtError } = await supabase
+          await supabase
             .from('monthly_targets')
             .insert({
               entry_id: id,
               month: monthName,
               target_quantity: month.target,
             });
-          
-          if (mtError) {
-            console.error(`Error inserting monthly target for ${monthName}:`, mtError);
-          }
         }
       }
     }
@@ -740,12 +676,8 @@ export const realtimeService = {
         { event: '*', schema: 'public', table: 'entries' },
         async (payload) => {
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-            const { data } = await supabase
-              .from('admin_entry_view')
-              .select('*')
-              .eq('id', payload.new.id)
-              .single();
-            callback({ ...payload, new: data });
+            const entry = await entriesService.getById(payload.new.id);
+            callback({ ...payload, new: entry });
           } else {
             callback(payload);
           }

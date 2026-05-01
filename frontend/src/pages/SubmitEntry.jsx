@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
@@ -118,6 +118,7 @@ function buildFormValuesFromEntry(entry) {
     acc[month.key] = found ? found.target : "";
     return acc;
   }, {});
+  
   return {
     planningYear: entry.planningYear || String(CURRENT_YEAR),
     unit: entry.unit || "",
@@ -157,6 +158,7 @@ export default function SubmitEntry({
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [supabaseTemplateData, setSupabaseTemplateData] = useState(null);
+  const hasLoadedEntry = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -268,22 +270,46 @@ export default function SubmitEntry({
   const activeMonthlyRows = useMemo(() => monthlyRowsWithTargets.filter((row) => row.target > 0), [monthlyRowsWithTargets]);
   const grandTotal = useMemo(() => monthlyRowsWithTargets.reduce((sum, row) => sum + row.amount, 0), [monthlyRowsWithTargets]);
 
+  // Effect to load entry data when editing - ONLY ONCE
   useEffect(() => {
-    if (entryToEdit && entryToEdit.status === "Returned") {
-      const shouldUseEditDraft = draftState?.mode === "edit" && draftState?.entryId === entryToEdit.id;
-      const nextValues = shouldUseEditDraft ? { ...defaultFormValues, ...draftState?.values } : buildFormValuesFromEntry(entryToEdit);
+    if (entryToEdit && entryToEdit.status === "Returned" && !hasLoadedEntry.current) {
+      hasLoadedEntry.current = true;
+      
+      // Build targets from monthlyBreakdown
+      const targetsInit = {};
+      if (entryToEdit.monthlyBreakdown && entryToEdit.monthlyBreakdown.length > 0) {
+        entryToEdit.monthlyBreakdown.forEach((item) => {
+          const monthKey = item.month.toLowerCase().slice(0, 3);
+          targetsInit[monthKey] = item.target;
+        });
+      }
+      
+      const nextValues = {
+        planningYear: entryToEdit.planningYear || String(CURRENT_YEAR),
+        unit: entryToEdit.unit || "",
+        component: entryToEdit.component || "",
+        subComponent: entryToEdit.subComponent || "",
+        keyActivity: entryToEdit.keyActivity || "",
+        no: entryToEdit.no ? String(entryToEdit.no) : "",
+        performanceIndicator: entryToEdit.performanceIndicator || "",
+        subActivity: entryToEdit.subActivity || "",
+        titleOfActivities: entryToEdit.titleOfActivities || "",
+        unitCost: entryToEdit.unitCost ?? "",
+        targets: targetsInit,
+      };
+      
+      console.log("Loading entry for edit:", nextValues);
       reset(nextValues);
-      setStep(shouldUseEditDraft ? draftState?.step || 1 : 1);
-      return;
+      setStep(1);
     }
-    if (draftState?.mode === "new" && draftState?.values) {
-      reset({ ...defaultFormValues, ...draftState.values });
-      setStep(draftState?.step || 1);
-      return;
-    }
-    reset(defaultFormValues);
-    setStep(1);
   }, [entryToEdit, reset]);
+
+  // Reset the loaded flag when entryToEdit changes to null (new form)
+  useEffect(() => {
+    if (!entryToEdit) {
+      hasLoadedEntry.current = false;
+    }
+  }, [entryToEdit]);
 
   useEffect(() => {
     if (!draftValues) return;
@@ -380,7 +406,6 @@ export default function SubmitEntry({
       return;
     }
 
-    // Calculate monthly rows with targets
     const parsedUnitCost = toNumber(data.unitCost);
     const monthlyRowsCalc = MONTHS.map((month) => {
       const target = toNumber(data.targets[month.key]);
@@ -396,16 +421,13 @@ export default function SubmitEntry({
       return;
     }
 
-    // Get the selected indicator details
     const selectedIndicatorDetails = noOptions.find(item => String(item.no) === String(data.no));
     
-    // Handle sub activity
     let subActivityValue = data.subActivity;
-    if (!subActivityValue || subActivityValue === FALLBACK_VALUE || subActivityValue === 'Select sub activity') {
+    if (!subActivityValue || subActivityValue === 'Select sub activity' || subActivityValue === 'N/A') {
       subActivityValue = '';
     }
     
-    // Format monthly breakdown - ONLY months with targets > 0
     const monthlyBreakdown = monthlyRowsCalc
       .filter(row => row.target > 0)
       .map((row) => ({
@@ -414,20 +436,11 @@ export default function SubmitEntry({
         amount: row.amount,
       }));
     
-    // Calculate grand total
     const total = monthlyRowsCalc.reduce((sum, row) => sum + row.amount, 0);
-
-    console.log("=== SUBMITTING ENTRY ===");
-    console.log("Unit Cost:", parsedUnitCost);
-    console.log("Monthly breakdown being sent:", monthlyBreakdown);
-    console.log("Grand Total:", total);
 
     if (isEditingReturnedEntry) {
       const updatedEntry = {
         ...entryToEdit,
-        ownerId: entryToEdit.ownerId || currentUser?.id || "",
-        ownerUsername: entryToEdit.ownerUsername || currentUser?.username || "",
-        ownerFullName: entryToEdit.ownerFullName || currentUser?.fullName || "",
         planningYear: data.planningYear,
         unit: data.unit,
         component: data.component,
@@ -448,6 +461,7 @@ export default function SubmitEntry({
       onSaveEditedEntry(entryToEdit.id, updatedEntry);
       reset(defaultFormValues);
       setStep(1);
+      hasLoadedEntry.current = false;
       onClearDraft?.();
       clearEditingEntry?.();
       navigate("/entries");
@@ -476,10 +490,10 @@ export default function SubmitEntry({
       submittedAt: new Date().toISOString(),
     };
 
-    console.log("Calling onAddEntry with:", JSON.stringify(newEntry, null, 2));
     onAddEntry(newEntry);
     reset(defaultFormValues);
     setStep(1);
+    hasLoadedEntry.current = false;
     onClearDraft?.();
     clearEditingEntry?.();
     navigate("/entries");
