@@ -148,20 +148,27 @@ export const entriesService = {
   // Helper function to transform snake_case to camelCase
   transformEntry(entry) {
     if (!entry) return entry;
+    
+    // Get unit name from joined data or fallback
+    const unitName = entry.units?.name || entry.unit || entry.unit_id || '';
+    
+    // Calculate grand total from unit_cost if grand_total doesn't exist
+    const grandTotal = entry.grand_total || Number(entry.unit_cost || 0);
+    
     return {
       id: entry.id,
       owner_id: entry.owner_id,
-      planningYear: entry.planning_year,
-      unit: entry.unit,
-      component: entry.component,
-      subComponent: entry.sub_component,
-      keyActivity: entry.key_activity,
+      planningYear: entry.planning_year || String(new Date().getFullYear()),
+      unit: unitName,
+      component: entry.component || entry.component_id || '',
+      subComponent: entry.sub_component || entry.sub_component_id || '',
+      keyActivity: entry.key_activity || entry.key_activity_id || '',
       titleOfActivities: entry.title_of_activities,
       unitCost: entry.unit_cost,
-      status: entry.status,
-      submittedAt: entry.submitted_at,
+      status: entry.status || entry.entry_status || 'Pending Review',
+      submittedAt: entry.submitted_at || entry.submission_date,
       monthlyBreakdown: entry.monthly_breakdown || [],
-      grandTotal: entry.grand_total || 0,
+      grandTotal: grandTotal,
       // Keep original fields just in case
       ...entry
     };
@@ -172,9 +179,9 @@ export const entriesService = {
     const { data: { user } } = await supabase.auth.getUser();
     
     let query = supabase
-      .from('admin_entry_view')
-      .select('*')
-      .order('submitted_at', { ascending: false });
+      .from('entries')
+      .select('*, units(name)')
+      .order('submission_date', { ascending: false });
 
     const profile = await authService.getProfile(user.id);
     if (profile.role !== 'admin') {
@@ -190,7 +197,7 @@ export const entriesService = {
   // Get single entry
   async getById(id) {
     const { data, error } = await supabase
-      .from('admin_entry_view')
+      .from('entries')
       .select('*')
       .eq('id', id)
       .single();
