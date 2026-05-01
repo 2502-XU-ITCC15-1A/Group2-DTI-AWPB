@@ -101,46 +101,12 @@ The AWPB System is a web-based application that allows encoders to submit annual
 
 
 
-Project Structure
+**Project Structure**
 text
-frontend/
-├── src/
-│   ├── assets/           # Images and static files
-│   ├── components/       # Reusable UI components
-│   │   ├── admin/        # Admin-specific components
-│   │   ├── entries/      # Entry-related components
-│   │   ├── layout/       # Layout components
-│   │   └── ui/           # shadcn/ui components
-│   ├── data/             # JSON data files
-│   ├── lib/              # Utility functions
-│   ├── pages/            # Page components
-│   │   ├── Login.jsx
-│   │   ├── Home.jsx
-│   │   ├── SubmitEntry.jsx
-│   │   ├── MyEntries.jsx
-│   │   ├── AdminReview.jsx
-│   │   ├── AdminDashboard.jsx
-│   │   ├── ManageTemplate.jsx
-│   │   ├── ManageAccounts.jsx
-│   │   └── AddNewAccount.jsx
-│   ├── services/         # API services
-│   │   └── supabaseService.js
-│   ├── App.jsx           # Main app component
-│   ├── main.jsx          # Entry point
-│   └── index.css         # Global styles
-├── public/               # Public assets
-├── .env                  # Environment variables
-├── package.json
-└── vite.config.js
+<img width="455" height="592" alt="image" src="https://github.com/user-attachments/assets/c86c3fae-40a7-430b-8a1c-9c8ecf91caf1" />
 
-supabase/
-└── migrations/           # Database migration files
-    ├── 001_create_awpb_schema.sql
-    ├── 002_seed_template_data.sql
-    ├── 003_rls_policies.sql
-    ├── 004_fix_rls_recursion.sql
-    ├── 005_awpb_entries.sql
-    └── 006_username_to_email_rpc.sql
+<img width="402" height="190" alt="image" src="https://github.com/user-attachments/assets/3e6c40f7-e8f6-49f3-9cd6-d020fbbedf81" />
+
 
     
 **User Roles**
