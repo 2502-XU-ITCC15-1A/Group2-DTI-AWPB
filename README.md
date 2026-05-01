@@ -3,23 +3,6 @@ markdown
 
 An Annual Work and Budget Plan (AWPB) management system for the DTI RAPID Growth Project, built with React and Supabase.
 
-## 📋 Table of Contents
-
-- [Overview](#overview)
-- [Tech Stack](#tech-stack)
-- [Features](#features)
-- [Architecture](#architecture)
-- [Installation](#installation)
-- [Environment Setup](#environment-setup)
-- [Database Setup](#database-setup)
-- [Running the Application](#running-the-application)
-- [Project Structure](#project-structure)
-- [User Roles](#user-roles)
-- [Key Features](#key-features)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
-- [License](#license)
-
 ## Overview
 
 The AWPB System is a web-based application that allows encoders to submit annual work and budget plans, and administrators to review, approve, or return submissions. The system manages complex hierarchical templates, monthly budget breakdowns, and user access control.
@@ -37,111 +20,86 @@ The AWPB System is a web-based application that allows encoders to submit annual
 | **React Router DOM** | Routing and navigation |
 | **Lucide React** | Icons |
 
-## Features
+## Project Status
+
+| Component | Status | Completion |
+|-----------|--------|------------|
+| Frontend | 🟢 Functional | 95% |
+| Database | 🟢 Functional | 95% |
+| Backend | 🔴 Removed | 0% |
+
+**Overall Status:** ✅ Ready for User Acceptance Testing (UAT)
+
+---
+
+## Working Features
 
 ### For Encoders
-- ✅ Submit AWPB entries with hierarchical classification
-- ✅ Enter monthly targets with automatic budget computation
-- ✅ View all submitted entries with status tracking
-- ✅ Edit returned entries with pre-populated data
-- ✅ Delete pending entries
-- ✅ View entry details
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Login | ✅ | Username/password authentication |
+| Submit Entry | ✅ | Complete AWPB entry form with 3-step wizard |
+| Monthly Budget Computation | ✅ | Unit Cost × Monthly Target = Amount |
+| Monthly Breakdown Display | ✅ | Shows targets and amounts in table |
+| Grand Total Calculation | ✅ | Sum of all monthly amounts |
+| View My Entries | ✅ | List of all submitted entries |
+| Entry Status Tracking | ✅ | Shows Pending/Returned/Approved/Rejected |
+| Edit Returned Entries | ✅ | All fields pre-populate when editing |
+| Delete Pending Entries | ✅ | Can delete entries not yet reviewed |
+| View Entry Details | ✅ | Modal with complete entry information |
 
 ### For Administrators
-- ✅ Review submitted entries (Approve/Return/Reject)
-- ✅ Add review comments for returned/rejected entries
-- ✅ Manage template hierarchy (Components, Sub-components, Key Activities)
-- ✅ Manage user accounts (Create, Edit, Activate, Deactivate)
-- ✅ Configure submission windows (Open/Close encoding periods)
-- ✅ View dashboard with budget summaries and statistics
-- ✅ Filter entries by status, unit, and year
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Admin Dashboard | ✅ | Overview with statistics and budgets |
+| Review Entries | ✅ | Table with all submissions |
+| No. Column | ✅ | Shows activity number from template |
+| Sub Activity Column | ✅ | Shows sub-activity from template |
+| Monthly Breakdown in Review | ✅ | Displays targets and amounts |
+| Approve Entries | ✅ | Changes status to "Approved" |
+| Return Entries | ✅ | Changes status to "Returned" with comments |
+| Reject Entries | ✅ | Changes status to "Rejected" with comments |
+| Manage Template | ✅ | CRUD for components, sub-components, key activities |
+| Manage Accounts | ✅ | Create, edit, activate, deactivate users |
+| Submission Window Control | ✅ | Open/close encoding periods |
+| Filter Entries | ✅ | By status, unit, year |
+| Budget by Unit | ✅ | Dashboard shows approved budgets per unit |
+
+### Database
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Supabase Integration | ✅ | Cloud database with real-time |
+| Row Level Security | ✅ | Policies for encoders and admins |
+| Foreign Key Relationships | ✅ | Properly linked tables |
+| Monthly Targets | ✅ | Stored separately for each entry |
+| Template Hierarchy | ✅ | 4-level nested structure |
+| User Profiles | ✅ | Extended auth users with roles |
+
+---
+
+## Features Needing Fix
+
+### High Priority
+
+| Issue | Description | Impact | Suggested Fix |
+|-------|-------------|--------|----------------|
+| `handle_new_user` Trigger | Trigger doesn't fire for users created via admin API | Admin-created users need manual profile creation | Modify trigger or create profiles programmatically |
+| RLS Warnings in Dashboard | Reference tables show "RLS Disabled" warnings | Cosmetic only, no functionality impact | Add SELECT-only RLS policies |
+
+### Low Priority
+
+| Issue | Description | Impact | Suggested Fix |
+|-------|-------------|--------|----------------|
+| Forgot Password | Feature exists but untested | Password reset flow not verified | Test and implement email reset |
+| Audit/History Table | No tracking of entry changes | Cannot see who changed what | Create audit trigger and table |
+| Legacy Backend Code | Express server files still in repo | Clutter, not used | Delete `backend/` folder |
+| Legacy Database Files | Old SQL files in root `database/` folder | Clutter, not used | Delete folder |
 
 
 
-text
-
-## Installation
-
-### Prerequisites
-
-- Node.js (v18 or higher)
-- npm or yarn
-- Supabase account (free tier works)
-
-### Steps
-
-1. **Clone the repository**
-```bash
-git clone <your-repo-url>
-cd slp-dti-awpb-system
-Install frontend dependencies
-
-bash
-cd frontend
-npm install
-Create a Supabase project
-
-Go to https://supabase.com
-
-Create a new project
-
-Save your project URL and anon key
-
-Set up environment variables
-
-Create frontend/.env file (see Environment Setup below)
-
-Run database migrations
-
-Copy migration files from supabase/migrations/ to Supabase SQL editor
-
-Run in order: 001 through 006
-
-Start the development server
-
-bash
-npm run dev
-Environment Setup
-Create frontend/.env file:
-
-env
-VITE_SUPABASE_URL=https://your-project-id.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key-here
-Database Setup
-Run Migrations in Order
-Run these SQL files in your Supabase SQL editor:
-
-Order	File	Purpose
-1	001_create_awpb_schema.sql	Create all tables and enums
-2	002_seed_template_data.sql	Load template hierarchy data
-3	003_rls_policies.sql	Set up Row Level Security
-4	004_fix_rls_recursion.sql	Fix RLS infinite recursion
-5	005_awpb_entries.sql	Create entries table
-6	006_username_to_email_rpc.sql	Create username lookup function
-Default Admin Account
-After migrations, create an admin user:
-
-sql
--- Run in Supabase SQL editor
-INSERT INTO auth.users (email, encrypted_password, email_confirmed_at, raw_user_meta_data)
-VALUES (
-  'admin@example.com',
-  crypt('admin123', gen_salt('bf')),
-  NOW(),
-  '{"username": "adm_admin", "full_name": "System Admin", "role": "admin"}'
-);
-Running the Application
-Development Mode
-bash
-cd frontend
-npm run dev
-App will run at http://localhost:5173
-
-Production Build
-bash
-cd frontend
-npm run build
-Build output will be in dist/ folder
 
 Project Structure
 text
@@ -183,7 +141,9 @@ supabase/
     ├── 004_fix_rls_recursion.sql
     ├── 005_awpb_entries.sql
     └── 006_username_to_email_rpc.sql
-User Roles
+
+    
+**User Roles**
 Encoder
 Username prefix: enc_ (e.g., enc_jdelacruz)
 
@@ -237,68 +197,6 @@ If Returned, encoder can edit and resubmit
 
 If Approved/Rejected, entry is locked
 
-Troubleshooting
-Common Issues
-Issue	Solution
-Login fails	Check username exists in profiles table
-Entries not showing	Verify RLS policies are applied
-Monthly breakdown empty	Check monthly_targets table has data
-Edit form not populating	Clear browser cache and refresh
-RLS policy errors	Run migration 004_fix_rls_recursion.sql
-Useful SQL Queries
-sql
--- Check all entries
-SELECT * FROM entries ORDER BY created_at DESC;
-
--- Check monthly targets
-SELECT * FROM monthly_targets;
-
--- Check users
-SELECT * FROM profiles;
-
--- Fix RLS issues
-DROP POLICY IF EXISTS "Encoders update own entries" ON entries;
-CREATE POLICY "Encoders update own entries" ON entries
-    FOR UPDATE USING (auth.uid() = owner_id);
-Contributing
-Create a feature branch
-
-Make your changes
-
-Test thoroughly
-
-Submit a pull request
-
-Code Style
-Use functional components with hooks
-
-Follow existing naming conventions
-
-Add console logs for debugging (remove before production)
-
-Test both encoder and admin views
-
-License
-© Xavier University – Ateneo de Cagayan
-In Fulfillment of SLP and ITCC project
-
-Support
-For issues or questions, contact the development team.
-
-Acknowledgments
-DTI RAPID Growth Project
-
-Xavier University – Ateneo de Cagayan
-
-Supabase for backend services
-
-shadcn/ui for component library
-
-Version: 1.0.0
-Last Updated: May 2026
-Status: Production Ready ✅
-
-text
 
 - ✅ Troubleshooting guide
 - ✅ Useful SQL queries
