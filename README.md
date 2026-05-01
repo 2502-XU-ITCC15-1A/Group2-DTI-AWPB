@@ -99,7 +99,8 @@ text
     
 **User Roles**
 Encoder
-Username prefix: enc_ (e.g., enc_jdelacruz)
+
+**Username prefix: enc_ (e.g., enc_jdelacruz)**
 
 Can submit and edit own entries
 
@@ -108,7 +109,7 @@ Can view own submission status
 Can edit returned entries
 
 Admin
-Username prefix: adm_ (e.g., adm_admin)
+**Username prefix: adm_ (e.g., adm_admin)**
 
 Can review all entries
 
@@ -120,36 +121,36 @@ Can configure submission windows
 
 Can view dashboard statistics
 
-Key Features
-Submission Window Control
+**Key Features**
+-**Submission Window Control**
 Admins can open/close encoding periods. When closed, encoders cannot submit new entries or edit returned ones.
 
-Monthly Budget Computation
+-**Monthly Budget Computation**
 Unit Cost × Monthly Target = Monthly Amount
 
 Grand Total = Sum of all monthly amounts
 
 Only months with targets > 0 are saved
 
-Template Management
+**Template Management**
 Admins can manage the 4-level hierarchy:
 
-Components
+- Components
 
-Sub-components
+- Sub-components
 
-Key Activities (with Activity No. and Performance Indicator)
+- Key Activities (with Activity No. and Performance Indicator)
 
-Sub-activities
+- Sub-activities
 
-Entry Review Workflow
-Encoder submits entry → Status: "Pending Review"
+**Entry Review Workflow**
+- Encoder submits entry → Status: "Pending Review"
 
-Admin reviews → Can Approve, Return, or Reject
+- Admin reviews → Can Approve, Return, or Reject
 
-If Returned, encoder can edit and resubmit
+- If Returned, encoder can edit and resubmit
 
-If Approved/Rejected, entry is locked
+- If Approved/Rejected, entry is locked
 
 
 - ✅ Troubleshooting guide
