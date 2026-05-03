@@ -119,6 +119,8 @@ export const usersService = {
       });
     }
 
+        // Ensure the return object matches exactly what our UI expects
+    // (camelCase and proper status)
     return {
       id: authData.user.id,
       username: userData.username,
