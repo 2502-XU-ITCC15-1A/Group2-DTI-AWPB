@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { supabase } from "../lib/supabase";
+import { authService } from "../services/supabaseService";
 
-export default function ForgotPassword({ accounts = [] }) {
+export default function ForgotPassword() {
   const [formData, setFormData] = useState({
     username: "",
     email: "",
   });
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -18,7 +21,7 @@ export default function ForgotPassword({ accounts = [] }) {
     }));
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
     const normalizedUsername = formData.username.trim().toLowerCase();
@@ -30,22 +33,36 @@ export default function ForgotPassword({ accounts = [] }) {
       return;
     }
 
-    const matchedAccount = accounts.find(
-      (account) =>
-        account.username === normalizedUsername &&
-        account.email.toLowerCase() === normalizedEmail,
-    );
-
-    if (!matchedAccount) {
-      setSuccessMessage("");
-      setError("We could not find an account matching that username and email.");
-      return;
-    }
-
+    setIsLoading(true);
     setError("");
-    setSuccessMessage(
-      `A frontend demo reset request was prepared for ${matchedAccount.username}. Actual password reset delivery will be handled by the backend.`,
-    );
+    setSuccessMessage("");
+
+    try {
+      const { data: lookedUpEmail, error: rpcError } = await supabase
+        .rpc("get_email_by_username", { p_username: normalizedUsername });
+
+      if (rpcError) {
+        console.error("Username lookup failed:", rpcError);
+        throw rpcError;
+      }
+
+      if (!lookedUpEmail || lookedUpEmail.toLowerCase() !== normalizedEmail) {
+        setSuccessMessage("If the account exists, a password reset link has been sent to the email address.");
+        return;
+      }
+
+      await authService.requestPasswordReset(
+        normalizedEmail,
+        `${window.location.origin}/confirm-password`
+      );
+
+      setSuccessMessage("If the account exists, a password reset link has been sent to the email address.");
+    } catch (error) {
+      console.error('Forgot password error:', error);
+      setError(error.message || 'Failed to request password reset. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -107,9 +124,10 @@ export default function ForgotPassword({ accounts = [] }) {
 
           <button
             type="submit"
-            className="w-full rounded-full bg-[#233f8f] px-4 py-3 text-base font-semibold text-white shadow-md transition hover:opacity-90"
+            disabled={isLoading}
+            className="w-full rounded-full bg-[#233f8f] px-4 py-3 text-base font-semibold text-white shadow-md transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            REQUEST RESET
+            {isLoading ? 'SENDING RESET LINK...' : 'REQUEST RESET'}
           </button>
         </form>
 
