@@ -184,16 +184,20 @@ INSERT INTO submission_windows (title, start_date, end_date, is_active) VALUES
 ('FY 2026 Submission Window', '2026-04-01', '2026-04-30', true);
 
 -- Create view for template hierarchy (for frontend consumption)
-CREATE VIEW template_hierarchy AS
+CREATE OR REPLACE VIEW template_hierarchy AS
 SELECT 
+    c.id as component_id,
     c.name as component,
     c.code as component_code,
+    sc.id as sub_component_id,
     sc.name as sub_component,
     sc.code as sub_component_code,
+    ka.id as key_activity_id,
     ka.name as key_activity,
     ka.code as key_activity_code,
     ka.activity_no,
     ka.performance_indicator,
+    sa.id as sub_activity_id,
     sa.name as sub_activity,
     sa.code as sub_activity_code,
     ka.sort_order

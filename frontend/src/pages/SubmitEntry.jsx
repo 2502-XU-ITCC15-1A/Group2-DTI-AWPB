@@ -29,11 +29,29 @@ const FALLBACK_VALUE = "N/A";
 // ---------------------------------------------------------------------------
 function buildTemplateDataFromSupabase(hierarchyRows, unitRows) {
   const hierarchy = {};
+  const idMap = {
+    units: {},
+    components: {},
+    subComponents: {},
+    keyActivities: {},
+    subActivities: {},
+  };
 
   for (const row of hierarchyRows || []) {
-    const { component, sub_component, key_activity, activity_no,
-      performance_indicator, sub_activity } = row;
+    const { 
+      component, component_id,
+      sub_component, sub_component_id,
+      key_activity, key_activity_id,
+      activity_no, performance_indicator, 
+      sub_activity, sub_activity_id 
+    } = row;
+
     if (!component) continue;
+
+    if (component) idMap.components[component] = component_id;
+    if (sub_component) idMap.subComponents[sub_component] = sub_component_id;
+    if (key_activity) idMap.keyActivities[key_activity] = key_activity_id;
+    if (sub_activity) idMap.subActivities[sub_activity] = sub_activity_id;
 
     // Ensure nested containers exist
     if (!hierarchy[component]) hierarchy[component] = {};
@@ -63,11 +81,13 @@ function buildTemplateDataFromSupabase(hierarchyRows, unitRows) {
   }
 
   const unitOptions = (unitRows || []).map((u) => ({
+    id: u.id,
     value: u.code || u.name,
     aliases: [u.name, u.code].filter(Boolean),
   }));
+  unitRows?.forEach((u) => (idMap.units[u.code || u.name] = u.id));
 
-  return { hierarchy, unitOptions };
+  return { hierarchy, unitOptions, idMap };
 }
 
 const MONTHS = [
@@ -553,11 +573,18 @@ export default function SubmitEntry({
       setStep(2);
       return;
     }
+    
+    const idMap = templateData?.idMap;
 
     if (isEditingReturnedEntry) {
       const updatedEntry = {
         ...entryToEdit,
         ownerId: entryToEdit.ownerId || currentUser?.id || "",
+        unitId: idMap?.units?.[data.unit],
+        componentId: idMap?.components?.[data.component],
+        subComponentId: idMap?.subComponents?.[data.subComponent],
+        keyActivityId: idMap?.keyActivities?.[data.keyActivity],
+        subActivityId: idMap?.subActivities?.[data.subActivity],
         ownerUsername: entryToEdit.ownerUsername || currentUser?.username || "",
         ownerFullName:
           entryToEdit.ownerFullName || currentUser?.fullName || "",
@@ -600,6 +627,11 @@ export default function SubmitEntry({
       ownerId: currentUser?.id || "",
       ownerUsername: currentUser?.username || "",
       ownerFullName: currentUser?.fullName || "",
+      unitId: idMap?.units?.[data.unit],
+      componentId: idMap?.components?.[data.component],
+      subComponentId: idMap?.subComponents?.[data.subComponent],
+      keyActivityId: idMap?.keyActivities?.[data.keyActivity],
+      subActivityId: idMap?.subActivities?.[data.subActivity],
       planningYear: data.planningYear,
       unit: data.unit,
       component: data.component,
