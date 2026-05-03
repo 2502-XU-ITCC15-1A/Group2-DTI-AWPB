@@ -42,6 +42,7 @@ export default function AdminEntryReviewModal({
   onApprove,
   onReturn,
   onReject,
+  onGenerateApprovedEntry,
 }) {
   const [reviewNote, setReviewNote] = useState("")
   const [reviewError, setReviewError] = useState("")
@@ -77,6 +78,8 @@ export default function AdminEntryReviewModal({
     setReviewError("")
     onApprove(reviewNote.trim())
   }
+
+  const isApprovedStatus = String(entry?.status || "").trim().toLowerCase() === "approved"
 
   return (
     <div
@@ -228,6 +231,15 @@ export default function AdminEntryReviewModal({
           </div>
 
           <div className="flex flex-wrap justify-end gap-3">
+            {isApprovedStatus && (
+              <button
+                type="button"
+                onClick={() => onGenerateApprovedEntry?.(entry)}
+                className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
+              >
+                Export to PDF
+              </button>
+            )}
             <button
               type="button"
               onClick={handleReturn}

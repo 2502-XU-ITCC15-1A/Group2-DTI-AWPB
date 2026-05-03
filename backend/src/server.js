@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const { Pool } = require('pg');
 require('dotenv').config();
-
+const PDFDocument = require('pdfkit');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -49,7 +49,7 @@ let templateData = {};
 try {
   templateData = require('../data/awpb_dropdown_tree.json');
 } catch (e) {
-  console.warn("⚠️ Warning: Template JSON not found. Using empty object.");
+  console.warn(" Warning: Template JSON not found. Using empty object.");
 }
 
 // JWT Secret
@@ -90,6 +90,72 @@ const generateToken = (user) => {
 const generateUserId = () => `acc-${Date.now()}`;
 
 // Routes
+
+// ================= PDF REPORT GENERATION =================
+app.get('/api/reports/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Get entry from database
+    const result = await pool.query(
+      `SELECT * FROM entries WHERE id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Entry not found' });
+    }
+
+    const entry = result.rows[0];
+
+    // Generate control number
+    const controlNumber = `DTI-AWPB-${new Date().getFullYear()}-${String(id).slice(0, 6)}`;
+
+    const doc = new PDFDocument({ margin: 50 });
+
+    const filename = `AWPB_Report_${controlNumber}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    doc.pipe(res);
+
+    // ===== HEADER =====
+    doc.fontSize(16).text("DEPARTMENT OF TRADE AND INDUSTRY", { align: "center" });
+    doc.fontSize(13).text("RAPID Growth Project - Region X", { align: "center" });
+
+    doc.moveDown();
+
+    doc.fontSize(12).text(`Control Number: ${controlNumber}`);
+    doc.text(`Entry ID: ${entry.id}`);
+    doc.text(`Planning Year: ${entry.planning_year}`);
+
+    doc.moveDown();
+
+    // ===== CONTENT =====
+    doc.fontSize(14).text("Annual Work Plan and Budget Report", {
+      underline: true
+    });
+
+    doc.moveDown();
+
+    doc.fontSize(12).text(`Title of Activities: ${entry.title_of_activities}`);
+    doc.text(`Unit Cost: ${entry.unit_cost}`);
+    doc.text(`Status: ${entry.status}`);
+
+    doc.moveDown();
+
+    doc.text("Prepared by: ____________________");
+    doc.text("Reviewed by: ____________________");
+    doc.text("Approved by: ____________________");
+
+    doc.end();
+
+  } catch (error) {
+    console.error('PDF error:', error);
+    res.status(500).json({ error: 'Failed to generate PDF' });
+  }
+});
 
 // Health check
 app.get('/api/health', (req, res) => {

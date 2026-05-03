@@ -203,6 +203,7 @@ async function loadTemplate() {
         description: `Status changed to ${updated.status}.`,
         type: "success",
       });
+      return updated;
     } catch (error) {
       console.error("Failed to update entry:", error);
       showToast({
@@ -210,6 +211,7 @@ async function loadTemplate() {
         description: error.message,
         type: "error",
       });
+      throw error;
     }
   };
 

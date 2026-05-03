@@ -8,4 +8,4 @@ WORKDIR /app
 RUN npm init -y
 
 # Tell Docker this container stays open
-CMD ["node", "-e", "setInterval(() => console.log('Backend Infrastructure Ready'), 10000)"]
+CMD ["node", "index.js"]
