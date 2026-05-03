@@ -119,7 +119,14 @@ export const usersService = {
       });
     }
 
-    return authData;
+    return {
+      id: authData.user.id,
+      username: userData.username,
+      fullName: userData.fullName,
+      email: userData.email,
+      role: userData.role,
+      status: 'active'
+    };
   },
 
   // Update user
