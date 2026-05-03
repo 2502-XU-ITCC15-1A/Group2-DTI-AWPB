@@ -86,4 +86,4 @@ volumes:
 
 networks:
   awpb-network:
-    driver: bridge`
+    driver: bridge

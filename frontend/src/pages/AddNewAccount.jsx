@@ -100,6 +100,13 @@ export default function AddNewAccount({
       await supabase.auth.signUp({
         email: form.email,
         password: form.password,
+        options: {
+          data: {
+            username: normalizedUsername,
+            full_name: form.fullName.trim(),
+            role: form.role,
+          },
+        },
       });
 
     if (authError) {
@@ -108,23 +115,6 @@ export default function AddNewAccount({
     }
 
     const userId = authData.user?.id;
-
-    // INSERT INTO DATABASE TABLE (changes)
-    const { error: dbError } = await supabase.from("profiles").insert([
-      {
-        id: userId,
-        username: normalizedUsername, // example: enc_jdelacruz
-        full_name: form.fullName.trim(),
-        email: form.email.trim(),
-        role: form.role,
-        status: "active",
-      },
-    ]);
-
-    if (dbError) {
-      setErrors({ email: dbError.message });
-      return;
-    }
 
     // KEEP ORIGINAL UI LOGIC (changes)
     onAddAccount?.({
