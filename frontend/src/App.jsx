@@ -272,7 +272,11 @@ async function loadTemplate() {
     setAccounts((prev) => [newAccount, ...prev]);
   };
 
-  const handleUpdateAccount = (accountId, updates) => {
+  const handleUpdateAccount = (accountId, updates, fullList = null) => {
+    if (fullList) {
+      setAccounts(fullList);
+      return;
+    }
     setAccounts((prev) =>
       prev.map((account) =>
         account.id === accountId ? { ...account, ...updates } : account
