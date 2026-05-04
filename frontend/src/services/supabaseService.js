@@ -195,7 +195,7 @@ export const entriesService = {
   // Helper function to transform snake_case to camelCase
   transformEntry(entry) {
     if (!entry) return entry;
-    S
+
     // Get joined names first, then fallback only to stored text labels.
     const unitName = entry.units?.name || entry.unit || entry.unit_id || '';
     const componentName = entry.components?.name || entry.component || '';
