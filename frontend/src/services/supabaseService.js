@@ -189,24 +189,40 @@ export const usersService = {
 // Entry management services
 // Entry management services
 export const entriesService = {
+  entrySelect:
+    '*, units(name), components(name), sub_components(name), key_activities(name, activity_no, performance_indicator), sub_activities(name)',
+
   // Helper function to transform snake_case to camelCase
   transformEntry(entry) {
     if (!entry) return entry;
-    
-    // Get unit name from joined data or fallback
+    S
+    // Get joined names first, then fallback only to stored text labels.
     const unitName = entry.units?.name || entry.unit || entry.unit_id || '';
+    const componentName = entry.components?.name || entry.component || '';
+    const subComponentName = entry.sub_components?.name || entry.sub_component || '';
+    const keyActivityName = entry.key_activities?.name || entry.key_activity || '';
+    const subActivityName = entry.sub_activities?.name || entry.sub_activity || '';
     
     // Calculate grand total from unit_cost if grand_total doesn't exist
     const grandTotal = entry.grand_total || Number(entry.unit_cost || 0);
     
     return {
+      // Keep original fields just in case, then overwrite with UI-safe names.
+      ...entry,
       id: entry.id,
       owner_id: entry.owner_id,
       planningYear: entry.planning_year || String(new Date().getFullYear()),
       unit: unitName,
-      component: entry.component || entry.component_id || '',
-      subComponent: entry.sub_component || entry.sub_component_id || '',
-      keyActivity: entry.key_activity || entry.key_activity_id || '',
+      component: componentName,
+      subComponent: subComponentName,
+      keyActivity: keyActivityName,
+      no: entry.no || entry.key_activities?.activity_no || '',
+      performanceIndicator:
+        entry.performance_indicator ||
+        entry.performanceIndicator ||
+        entry.key_activities?.performance_indicator ||
+        '',
+      subActivity: subActivityName,
       titleOfActivities: entry.title_of_activities,
       unitCost: entry.unit_cost,
       status: entry.status || entry.entry_status || 'Pending Review',
@@ -214,8 +230,6 @@ export const entriesService = {
       monthlyBreakdown: entry.monthly_breakdown || [],
       adminComment: entry.admin_comment || entry.reviewer_notes || '',
       grandTotal: grandTotal,
-      // Keep original fields just in case
-      ...entry
     };
   },
 
@@ -246,7 +260,7 @@ export const entriesService = {
     
     let query = supabase
       .from('entries')
-      .select('*, units(name)')
+      .select(this.entrySelect)
       .order('submission_date', { ascending: false });
 
     const profile = await authService.getProfile(user.id);
@@ -264,7 +278,7 @@ export const entriesService = {
   async getById(id) {
     const { data, error } = await supabase
       .from('entries')
-      .select('*')
+      .select(this.entrySelect)
       .eq('id', id)
       .single();
     

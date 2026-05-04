@@ -141,15 +141,29 @@ async function loadTemplate() {
   // 2. Real‑time subscription for entries
   // ------------------------------------------------------------
   useEffect(() => {
-    const subscription = realtimeService.subscribeToEntries((payload) => {
+    const subscription = realtimeService.subscribeToEntries(async (payload) => {
       const { eventType, new: newRecord, old: oldRecord } = payload;
 
       if (eventType === "INSERT") {
-        setEntries((prev) => [newRecord, ...prev]);
+        try {
+          const created = await entriesService.getById(newRecord.id);
+          setEntries((prev) =>
+            prev.some((entry) => entry.id === created.id)
+              ? prev.map((entry) => (entry.id === created.id ? created : entry))
+              : [created, ...prev]
+          );
+        } catch (error) {
+          console.error("Failed to load realtime entry:", error);
+        }
       } else if (eventType === "UPDATE") {
-        setEntries((prev) =>
-          prev.map((entry) => (entry.id === newRecord.id ? newRecord : entry))
-        );
+        try {
+          const updated = await entriesService.getById(newRecord.id);
+          setEntries((prev) =>
+            prev.map((entry) => (entry.id === updated.id ? updated : entry))
+          );
+        } catch (error) {
+          console.error("Failed to load realtime entry update:", error);
+        }
       } else if (eventType === "DELETE") {
         setEntries((prev) =>
           prev.filter((entry) => entry.id !== oldRecord.id)
