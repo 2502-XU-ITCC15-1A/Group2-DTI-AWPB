@@ -31,6 +31,41 @@ export const authService = {
     return data;
   },
 
+  async requestPasswordReset(email, redirectTo) {
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo,
+    });
+
+    if (error) throw error;
+    return data;
+  },
+
+  async exchangeRecoveryCode(code) {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (error) throw error;
+    return data;
+  },
+
+  async setRecoverySession(accessToken, refreshToken) {
+    const { data, error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+
+    if (error) throw error;
+    return data;
+  },
+
+  async updatePassword(newPassword) {
+    const { data, error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) throw error;
+    return data;
+  },
+
   // Sign out user
   async signOut() {
     const { error } = await supabase.auth.signOut();
