@@ -33,7 +33,7 @@ pool.connect((err, client, release) => {
   if (err) {
     console.error('Database connection error:', err.stack);
   } else {
-    console.log('✅ Connected to Supabase database');
+    console.log(' Connected to Supabase database');
     release();
   }
 });
@@ -934,9 +934,9 @@ app.post('/api/auth/forgot-password', [
     // For demo purposes, we'll log the reset link
     const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/confirm-password?token=${resetToken}`;
 
-    console.log('🔗 Password Reset Link (Demo):', resetLink);
-    console.log('📧 Would send email to:', user.email);
-    console.log('👤 For user:', user.username);
+    console.log(' Password Reset Link (Demo):', resetLink);
+    console.log(' Would send email to:', user.email);
+    console.log(' For user:', user.username);
 
     res.json({ message: 'If the account exists, a password reset link has been sent to the email address.' });
   } catch (error) {
@@ -1000,10 +1000,10 @@ app.use((err, req, res, next) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`🚀 AWPB Backend Server running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`🔗 API endpoints: http://localhost:${PORT}/api`);
-  console.log(`👥 Default users:`);
+  console.log(` AWPB Backend Server running on port ${PORT}`);
+  console.log(` Health check: http://localhost:${PORT}/api/health`);
+  console.log(` API endpoints: http://localhost:${PORT}/api`);
+  console.log(` Default users:`);
   console.log(`   - Admin: adm_admin / password123`);
   console.log(`   - Encoder: enc_user / password123`);
 });
