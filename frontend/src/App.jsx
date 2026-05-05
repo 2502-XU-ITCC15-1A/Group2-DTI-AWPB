@@ -7,6 +7,7 @@ import { getTemplateHierarchy } from "./services/templateService";
 
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
+import ConfirmPassword from "./pages/ConfirmPassword";
 import Home from "./pages/Home";
 import MyEntries from "./pages/MyEntries";
 import SubmitEntry from "./pages/SubmitEntry";
@@ -203,6 +204,7 @@ async function loadTemplate() {
         description: `Status changed to ${updated.status}.`,
         type: "success",
       });
+      return updated;
     } catch (error) {
       console.error("Failed to update entry:", error);
       showToast({
@@ -210,6 +212,7 @@ async function loadTemplate() {
         description: error.message,
         type: "error",
       });
+      throw error;
     }
   };
 
@@ -386,7 +389,8 @@ async function loadTemplate() {
     return (
       <Routes>
         <Route path="/login" element={<Login onLogin={handleLogin} accounts={accounts} />} />
-        <Route path="/forgot-password" element={<ForgotPassword accounts={accounts} />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/confirm-password" element={<ConfirmPassword />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -410,6 +414,10 @@ async function loadTemplate() {
         />
         <Route
           path="/forgot-password"
+          element={<Navigate to={currentRole === "admin" ? "/admin/dashboard" : "/"} replace />}
+        />
+        <Route
+          path="/confirm-password"
           element={<Navigate to={currentRole === "admin" ? "/admin/dashboard" : "/"} replace />}
         />
         <Route

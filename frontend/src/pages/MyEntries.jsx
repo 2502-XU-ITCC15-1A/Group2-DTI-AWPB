@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, Eye, Pencil, Lock, Trash2 } from "lucide-react";
+import { generateApprovedEntryPdf } from "../services/pdfService";
 
 import EntryDetailsModal from "../components/entries/EntryDetailsModal";
 import AdminDeleteEntryModal from "../components/admin/AdminDeleteEntryModal";
@@ -73,6 +74,10 @@ function isSubmissionWindowOpen(submissionWindow) {
   const end = new Date(`${endDate}T23:59:59`);
 
   return today >= start && today <= end;
+}
+
+function isApprovedStatus(status) {
+  return String(status || "").trim().toLowerCase() === "approved";
 }
 
 export default function MyEntries({
@@ -149,6 +154,25 @@ export default function MyEntries({
     }
 
     setDeleteTarget(null);
+  };
+
+  const handleExportToPdf = async (entry) => {
+    if (!isApprovedStatus(entry.status)) return;
+
+    try {
+      const { filename } = await generateApprovedEntryPdf(entry);
+      onShowToast?.({
+        title: "PDF exported",
+        description: `${filename} is ready for printing.`,
+        type: "success",
+      });
+    } catch {
+      onShowToast?.({
+        title: "Export failed",
+        description: "Could not export this approved entry to PDF.",
+        type: "error",
+      });
+    }
   };
 
   return (
@@ -264,7 +288,7 @@ export default function MyEntries({
                   <col className="w-[18%]" />
                   <col className="w-[13%]" />
                   <col className="w-[11%]" />
-                  <col className="w-[7%]" />
+                  <col className="w-[18%]" />
                 </colgroup>
 
                 <thead className="bg-slate-50 text-left">
@@ -324,7 +348,7 @@ export default function MyEntries({
                       </td>
 
                       <td className="px-4 py-4 align-middle">
-                        <div className="flex items-center justify-center gap-0.5">
+                        <div className="flex items-center justify-center gap-1">
                           <Button
                             type="button"
                             variant="ghost"
@@ -377,6 +401,17 @@ export default function MyEntries({
                               <Trash2 />
                             </Button>
                           )}
+
+                          {isApprovedStatus(entry.status) && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleExportToPdf(entry)}
+                            >
+                              Export to PDF
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -391,6 +426,7 @@ export default function MyEntries({
       <EntryDetailsModal
         entry={selectedEntry}
         onClose={() => setSelectedEntry(null)}
+        onExportToPdf={handleExportToPdf}
       />
 
       <AdminDeleteEntryModal

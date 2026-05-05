@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Search, Eye, Trash2 } from "lucide-react";
+import { generateApprovedEntryPdf } from "../services/pdfService";
 
 import AdminEntryReviewModal from "../components/admin/AdminEntryReviewModal";
 import AdminDeleteEntryModal from "../components/admin/AdminDeleteEntryModal";
@@ -52,6 +53,10 @@ function getStatusBadgeVariant(status) {
   }
 }
 
+function isApprovedStatus(status) {
+  return String(status || "").trim().toLowerCase() === "approved";
+}
+
 export default function AdminReview({
   entries = [],
   onUpdateEntry,
@@ -97,23 +102,52 @@ export default function AdminReview({
     });
   }, [entries, searchTerm, statusFilter, unitFilter, yearFilter]);
 
-  const handleApprove = (note) => {
+  const handleApprove = async (note) => {
     if (!selectedEntry) return;
 
+    const reviewedAt = new Date().toISOString();
     const entryTitle = selectedEntry.titleOfActivities;
-    onUpdateEntry(selectedEntry.id, {
-      status: "Approved",
-      adminComment: note || "",
-      reviewedAt: new Date().toISOString(),
-    });
 
-    onShowToast?.({
-      title: "Entry approved",
-      description: `${entryTitle} was approved successfully.`,
-      type: "success",
-    });
+    try {
+      await onUpdateEntry(selectedEntry.id, {
+        status: "Approved",
+        adminComment: note || "",
+        reviewedAt,
+      });
 
-    setSelectedEntry(null);
+      onShowToast?.({
+        title: "Entry approved",
+        description: `${entryTitle} was approved successfully.`,
+        type: "success",
+      });
+
+      setSelectedEntry(null);
+    } catch {
+      onShowToast?.({
+        title: "Approval failed",
+        description: "Could not approve this entry.",
+        type: "error",
+      });
+    }
+  };
+
+  const handleGenerateApprovedEntry = async (entry) => {
+    if (!isApprovedStatus(entry.status)) return;
+
+    try {
+      const { filename } = await generateApprovedEntryPdf(entry);
+      onShowToast?.({
+        title: "PDF generated",
+        description: `${filename} is ready for printing.`,
+        type: "success",
+      });
+    } catch {
+      onShowToast?.({
+        title: "PDF generation failed",
+        description: "Could not generate the approved entry PDF.",
+        type: "error",
+      });
+    }
   };
 
   const handleReturn = (note) => {
@@ -378,6 +412,7 @@ export default function AdminReview({
         onApprove={handleApprove}
         onReturn={handleReturn}
         onReject={handleReject}
+        onGenerateApprovedEntry={handleGenerateApprovedEntry}
       />
 
       <AdminDeleteEntryModal
