@@ -36,9 +36,49 @@ function App() {
   const [templateData, setTemplateData] = useState(createInitialTemplateState);
   const [submissionWindow, setSubmissionWindow] = useState(null);
   const [authUser, setAuthUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [toast, setToast] = useState(null);
   const toastTimeoutRef = useRef(null);
   const toastDismissRef = useRef(null);
+
+  // Restore session on page load / listen for auth changes
+  useEffect(() => {
+    let cancelled = false;
+
+    const restoreSession = async () => {
+      try {
+        const user = await authService.getCurrentUser();
+        if (user && !cancelled) {
+          const profile = await authService.getProfile(user.id);
+          setAuthUser({
+            id: user.id,
+            username: profile.username,
+            email: profile.email,
+            fullName: profile.full_name,
+            role: profile.role,
+            status: profile.status,
+          });
+        }
+      } catch (err) {
+        // No active session — stay on login
+      } finally {
+        if (!cancelled) setAuthLoading(false);
+      }
+    };
+
+    restoreSession();
+
+    const { data: { subscription } } = authService.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setAuthUser(null);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -193,8 +233,23 @@ function App() {
     }
   };
 
-  const handleAddAccount = (newAccount) => {
-    setAccounts((prev) => [newAccount, ...prev]);
+  const handleAddAccount = async (newAccount) => {
+    // Reload all accounts from Supabase to get the full list with proper IDs
+    try {
+      const profiles = await usersService.getAll();
+      const formattedAccounts = profiles.map((profile) => ({
+        id: profile.id,
+        username: profile.username,
+        fullName: profile.full_name,
+        email: profile.email,
+        role: profile.role,
+        status: profile.status,
+      }));
+      setAccounts(formattedAccounts);
+    } catch (err) {
+      // Fallback: just add to local state
+      setAccounts((prev) => [newAccount, ...prev]);
+    }
   };
 
   const handleUpdateAccount = (accountId, updates) => {
@@ -235,7 +290,12 @@ function App() {
     reloadData();
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await authService.signOut();
+    } catch (err) {
+      console.error("Sign out error:", err);
+    }
     setAuthUser(null);
     setEntryBeingEdited(null);
     setSubmitEntryDraft(null);
@@ -280,6 +340,14 @@ function App() {
       { to: "/submit", label: "Submit Entry", icon: "submit" },
     ];
   }, [currentRole]);
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-slate-500">Loading...</p>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
