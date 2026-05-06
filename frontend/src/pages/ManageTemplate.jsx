@@ -84,9 +84,9 @@ const getComponentIdByName = async (name) => {
     .from('components')
     .select('id')
     .eq('name', name)
-    .single();
-  if (error) throw new Error(`Component not found: ${name}`);
-  return data.id;
+    .limit(1);
+  if (error || !data || data.length === 0) throw new Error(`Component not found: ${name}`);
+  return data[0].id;
 };
 
 const getSubComponentIdByName = async (subCompName, componentName) => {
@@ -96,9 +96,9 @@ const getSubComponentIdByName = async (subCompName, componentName) => {
     .select('id')
     .eq('component_id', compId)
     .eq('name', subCompName)
-    .single();
-  if (error) throw new Error(`Sub‑component not found: ${subCompName}`);
-  return data.id;
+    .limit(1);
+  if (error || !data || data.length === 0) throw new Error(`Sub-component not found: ${subCompName}`);
+  return data[0].id;
 };
 
 const getKeyActivityIdByName = async (kaName, subCompName, componentName) => {
@@ -108,9 +108,9 @@ const getKeyActivityIdByName = async (kaName, subCompName, componentName) => {
     .select('id')
     .eq('sub_component_id', subCompId)
     .eq('name', kaName)
-    .single();
-  if (error) throw new Error(`Key activity not found: ${kaName}`);
-  return data.id;
+    .limit(1);
+  if (error || !data || data.length === 0) throw new Error(`Key activity not found: ${kaName}`);
+  return data[0].id;
 };
 
 export default function ManageTemplate({
@@ -499,7 +499,7 @@ export default function ManageTemplate({
       await templateMgmtService.createKeyActivity({
         sub_component_id: subCompId,
         name,
-        code: `${selectedSubComponent.toUpperCase().replace(/ /g, '_')}_${name.toUpperCase().replace(/ /g, '_')}`,
+        code: `KA_${name.toUpperCase().replace(/ /g, '_')}_${Date.now()}`,
         sort_order: keyActivityNames.length + 1,
         is_active: true
       });
@@ -573,8 +573,8 @@ export default function ManageTemplate({
     }
   };
 
-  // ========== PERFORMANCE INDICATOR & SUB ACTIVITIES (LOCAL ONLY) ==========
-  const addIndicator = () => {
+  // ========== PERFORMANCE INDICATOR & SUB ACTIVITIES (PERSISTED) ==========
+  const addIndicator = async () => {
     const nextNo = normalizeIndicatorNo(newIndicatorNo);
     const nextText = normalizeName(newIndicatorText);
     if (!selectedComponent || !selectedSubComponent || !selectedKeyActivity) return;
@@ -587,28 +587,40 @@ export default function ManageTemplate({
       });
       return;
     }
-    updateTemplate((nextTemplate) => {
-      nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity].push({
-        no: nextNo,
-        performanceIndicator: nextText,
-        subActivities: [],
+    try {
+      const kaId = await getKeyActivityIdByName(selectedKeyActivity, selectedSubComponent, selectedComponent);
+      await templateMgmtService.createPerformanceIndicator({
+        key_activity_id: kaId,
+        activity_no: nextNo,
+        label: nextText,
+        sort_order: indicatorItems.length + 1,
+        is_active: true,
       });
-    });
-    setNewIndicatorNo("");
-    setNewIndicatorText("");
-    setSelectedIndicatorIndex(indicatorItems.length);
-    setSelectedSubActivityIndex(0);
-    setIndicatorMenuOpen(false);
-    setShowAddIndicatorInput(false);
-    setEditingIndicatorIndex(null);
-    onShowToast?.({
-      title: "Performance indicator added",
-      description: `No. ${nextNo} was added under ${selectedKeyActivity}.`,
-      type: "success",
-    });
+      updateTemplate((nextTemplate) => {
+        nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity].push({
+          no: nextNo,
+          performanceIndicator: nextText,
+          subActivities: [],
+        });
+      });
+      setNewIndicatorNo("");
+      setNewIndicatorText("");
+      setSelectedIndicatorIndex(indicatorItems.length);
+      setSelectedSubActivityIndex(0);
+      setIndicatorMenuOpen(false);
+      setShowAddIndicatorInput(false);
+      setEditingIndicatorIndex(null);
+      onShowToast?.({
+        title: "Performance indicator added",
+        description: `No. ${nextNo} was added under ${selectedKeyActivity}.`,
+        type: "success",
+      });
+    } catch (err) {
+      onShowToast?.({ title: "Error", description: err.message, type: "error" });
+    }
   };
 
-  const saveIndicator = () => {
+  const saveIndicator = async () => {
     if (!selectedComponent || !selectedSubComponent || !selectedKeyActivity || !selectedIndicator) return;
     const nextNo = normalizeIndicatorNo(indicatorDraft.no);
     const nextText = normalizeName(indicatorDraft.performanceIndicator);
@@ -628,78 +640,158 @@ export default function ManageTemplate({
       });
       return;
     }
-    updateTemplate((nextTemplate) => {
-      nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity][selectedIndicatorIndex] = {
-        no: nextNo,
-        performanceIndicator: nextText,
-        subActivities: selectedIndicator.subActivities || [],
-      };
-    });
-    onShowToast?.({
-      title: "Indicator updated",
-      description: `No. ${nextNo} was updated successfully.`,
-      type: "success",
-    });
+    try {
+      const kaId = await getKeyActivityIdByName(selectedKeyActivity, selectedSubComponent, selectedComponent);
+      // Find the performance_indicator row by key_activity_id + old activity_no
+      const { data: piRow } = await supabase
+        .from('performance_indicators')
+        .select('id')
+        .eq('key_activity_id', kaId)
+        .eq('activity_no', selectedIndicator.no)
+        .maybeSingle();
+      if (piRow) {
+        await templateMgmtService.updatePerformanceIndicator(piRow.id, {
+          activity_no: nextNo,
+          label: nextText,
+        });
+      }
+      updateTemplate((nextTemplate) => {
+        nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity][selectedIndicatorIndex] = {
+          no: nextNo,
+          performanceIndicator: nextText,
+          subActivities: selectedIndicator.subActivities || [],
+        };
+      });
+      onShowToast?.({
+        title: "Indicator updated",
+        description: `No. ${nextNo} was updated successfully.`,
+        type: "success",
+      });
+    } catch (err) {
+      onShowToast?.({ title: "Error", description: err.message, type: "error" });
+    }
   };
 
-  const deleteIndicator = () => {
+  const deleteIndicator = async () => {
     if (!deleteTarget || deleteTarget.kind !== "indicator" || !selectedComponent || !selectedSubComponent || !selectedKeyActivity) return;
-    updateTemplate((nextTemplate) => {
-      nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity].splice(deleteTarget.index, 1);
-    });
-    onShowToast?.({
-      title: "Indicator deleted",
-      description: `No. ${deleteTarget.label} was removed.`,
-      type: "success",
-    });
+    try {
+      const kaId = await getKeyActivityIdByName(selectedKeyActivity, selectedSubComponent, selectedComponent);
+      const targetItem = indicatorItems[deleteTarget.index];
+      if (targetItem) {
+        const { data: piRow } = await supabase
+          .from('performance_indicators')
+          .select('id')
+          .eq('key_activity_id', kaId)
+          .eq('activity_no', targetItem.no)
+          .maybeSingle();
+        if (piRow) {
+          await templateMgmtService.deletePerformanceIndicator(piRow.id);
+        }
+      }
+      updateTemplate((nextTemplate) => {
+        nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity].splice(deleteTarget.index, 1);
+      });
+      onShowToast?.({
+        title: "Indicator deleted",
+        description: `No. ${deleteTarget.label} was removed.`,
+        type: "success",
+      });
+    } catch (err) {
+      onShowToast?.({ title: "Error", description: err.message, type: "error" });
+    }
     setEditingIndicatorIndex(null);
     setDeleteTarget(null);
   };
 
-  const addSubActivity = () => {
+  const addSubActivity = async () => {
     const nextText = normalizeName(newSubActivityText);
     if (!selectedIndicator || !nextText) return;
-    updateTemplate((nextTemplate) => {
-      const targetIndicator = nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity][selectedIndicatorIndex];
-      targetIndicator.subActivities = [...(targetIndicator.subActivities || []), nextText];
-    });
-    setNewSubActivityText("");
-    setSelectedSubActivityIndex(subActivityItems.length);
-    setSubActivityMenuOpen(false);
-    setShowAddSubActivityInput(false);
-    setEditingSubActivityIndex(null);
-    onShowToast?.({
-      title: "Sub activity added",
-      description: "A new sub activity was added to the selected indicator.",
-      type: "success",
-    });
+    try {
+      const kaId = await getKeyActivityIdByName(selectedKeyActivity, selectedSubComponent, selectedComponent);
+      // Create sub_activity linked to the key_activity (FK references key_activities table)
+      await templateMgmtService.createSubActivity({
+        key_activity_id: kaId,
+        name: nextText,
+        code: `${selectedKeyActivity.toUpperCase().replace(/ /g, '_')}_SA_${Date.now()}`,
+        sort_order: subActivityItems.length + 1,
+        is_active: true,
+      });
+      updateTemplate((nextTemplate) => {
+        const targetIndicator = nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity][selectedIndicatorIndex];
+        targetIndicator.subActivities = [...(targetIndicator.subActivities || []), nextText];
+      });
+      setNewSubActivityText("");
+      setSelectedSubActivityIndex(subActivityItems.length);
+      setSubActivityMenuOpen(false);
+      setShowAddSubActivityInput(false);
+      setEditingSubActivityIndex(null);
+      onShowToast?.({
+        title: "Sub activity added",
+        description: "A new sub activity was added to the selected indicator.",
+        type: "success",
+      });
+    } catch (err) {
+      onShowToast?.({ title: "Error", description: err.message, type: "error" });
+    }
   };
 
-  const saveSubActivity = () => {
+  const saveSubActivity = async () => {
     const nextText = normalizeName(subActivityDraft);
     if (!selectedIndicator || !selectedSubActivity || !nextText) return;
-    updateTemplate((nextTemplate) => {
-      const targetIndicator = nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity][selectedIndicatorIndex];
-      targetIndicator.subActivities[selectedSubActivityIndex] = nextText;
-    });
-    onShowToast?.({
-      title: "Sub activity updated",
-      description: "The selected sub activity was updated successfully.",
-      type: "success",
-    });
+    try {
+      const kaId = await getKeyActivityIdByName(selectedKeyActivity, selectedSubComponent, selectedComponent);
+      // Find the sub_activity row by name under this key_activity
+      const { data: saRow } = await supabase
+        .from('sub_activities')
+        .select('id')
+        .eq('key_activity_id', kaId)
+        .eq('name', selectedSubActivity)
+        .limit(1);
+      if (saRow && saRow.length > 0) {
+        await templateMgmtService.updateSubActivity(saRow[0].id, { name: nextText });
+      }
+      updateTemplate((nextTemplate) => {
+        const targetIndicator = nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity][selectedIndicatorIndex];
+        targetIndicator.subActivities[selectedSubActivityIndex] = nextText;
+      });
+      onShowToast?.({
+        title: "Sub activity updated",
+        description: "The selected sub activity was updated successfully.",
+        type: "success",
+      });
+    } catch (err) {
+      onShowToast?.({ title: "Error", description: err.message, type: "error" });
+    }
   };
 
-  const deleteSubActivity = () => {
+  const deleteSubActivity = async () => {
     if (!deleteTarget || deleteTarget.kind !== "subActivity" || !selectedIndicator) return;
-    updateTemplate((nextTemplate) => {
-      const targetIndicator = nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity][selectedIndicatorIndex];
-      targetIndicator.subActivities.splice(deleteTarget.index, 1);
-    });
-    onShowToast?.({
-      title: "Sub activity deleted",
-      description: "The selected sub activity was removed.",
-      type: "success",
-    });
+    try {
+      const kaId = await getKeyActivityIdByName(selectedKeyActivity, selectedSubComponent, selectedComponent);
+      const targetName = subActivityItems[deleteTarget.index];
+      if (targetName) {
+        const { data: saRow } = await supabase
+          .from('sub_activities')
+          .select('id')
+          .eq('key_activity_id', kaId)
+          .eq('name', targetName)
+          .limit(1);
+        if (saRow && saRow.length > 0) {
+          await templateMgmtService.deleteSubActivity(saRow[0].id);
+        }
+      }
+      updateTemplate((nextTemplate) => {
+        const targetIndicator = nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity][selectedIndicatorIndex];
+        targetIndicator.subActivities.splice(deleteTarget.index, 1);
+      });
+      onShowToast?.({
+        title: "Sub activity deleted",
+        description: "The selected sub activity was removed.",
+        type: "success",
+      });
+    } catch (err) {
+      onShowToast?.({ title: "Error", description: err.message, type: "error" });
+    }
     setEditingSubActivityIndex(null);
     setDeleteTarget(null);
   };

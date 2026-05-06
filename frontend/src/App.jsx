@@ -61,16 +61,31 @@ async function loadTemplate() {
     const c = row.component;
     const s = row.sub_component;
     const k = row.key_activity;
+    const actNo = row.activity_no ?? row.no;
+    const piText = row.performance_indicator || row.label || "";
 
+    if (!c) return;
     if (!hierarchy[c]) hierarchy[c] = {};
+    if (!s) return;
     if (!hierarchy[c][s]) hierarchy[c][s] = {};
+    if (!k) return;
     if (!hierarchy[c][s][k]) hierarchy[c][s][k] = [];
 
-    hierarchy[c][s][k].push({
-      no: row.no,
-      performanceIndicator: row.performance_indicator,
-      subActivities: row.sub_activity ? [row.sub_activity] : [],
-    });
+    // Skip rows without an activity number (placeholder key-activity rows)
+    if (!actNo) return;
+
+    // Find or create the entry grouped by activity_no
+    const bucket = hierarchy[c][s][k];
+    let entry = bucket.find((item) => String(item.no) === String(actNo));
+    if (!entry) {
+      entry = { no: actNo, performanceIndicator: piText, subActivities: [] };
+      bucket.push(entry);
+    }
+
+    // Add sub-activity if present and not already tracked
+    if (row.sub_activity && !entry.subActivities.includes(row.sub_activity)) {
+      entry.subActivities.push(row.sub_activity);
+    }
   });
 
   setTemplateData({ hierarchy });

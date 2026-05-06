@@ -636,6 +636,43 @@ export const templateMgmtService = {
     if (error) throw error;
   },
 
+  async createPerformanceIndicator(data) {
+    const { data: result, error } = await supabase
+      .from('performance_indicators')
+      .insert({
+        key_activity_id: data.key_activity_id,
+        activity_no: data.activity_no,
+        label: data.label,
+        sort_order: data.sort_order,
+        is_active: data.is_active ?? true
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return result;
+  },
+
+  async updatePerformanceIndicator(id, updates) {
+    const { data: result, error } = await supabase
+      .from('performance_indicators')
+      .update({
+        activity_no: updates.activity_no,
+        label: updates.label,
+        sort_order: updates.sort_order,
+        is_active: updates.is_active
+      })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return result;
+  },
+
+  async deletePerformanceIndicator(id) {
+    const { error } = await supabase.from('performance_indicators').delete().eq('id', id);
+    if (error) throw error;
+  },
+
   async createSubActivity(data) {
     const { data: result, error } = await supabase
       .from('sub_activities')
