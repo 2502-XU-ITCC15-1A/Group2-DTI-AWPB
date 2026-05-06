@@ -86,41 +86,13 @@ export default function ManageAccounts({
   //   App.jsx (a hardcoded INITIAL_ACCOUNTS array). It could never see the
   //   real users in Supabase.
   // After:  we keep the prop as an initial fallback (so the UI isn't blank
-  //   during the fetch) but then replace it with the real users we load from
-  //   Supabase in the useEffect below.
+  //   during the fetch) and sync it with the parent state.
   // -------------------------------------------------------------------------
   const [accounts, setAccounts] = useState(accountsProp);
 
-  // -------------------------------------------------------------------------
-  // FIX #3: Actually fetch users from Supabase when the page loads
-  // -------------------------------------------------------------------------
-  // `usersService.getAll()` runs a SELECT * FROM profiles in Supabase. We then
-  // map each row into our camelCase UI shape and store them in state.
-  // The `cancelled` flag protects against setting state on an unmounted page
-  // (e.g. if the admin navigates away while the request is still in-flight).
-  // -------------------------------------------------------------------------
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const profiles = await usersService.getAll();
-        if (!cancelled) {
-          setAccounts(profiles.map(mapProfileToAccount));
-        }
-      } catch (err) {
-        console.error("Failed to load accounts from Supabase:", err);
-        onShowToast?.({
-          title: "Could not load accounts",
-          description: err.message || "Please try again.",
-          type: "error",
-        });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    setAccounts(accountsProp);
+  }, [accountsProp]);
 
   // -------------------------------------------------------------------------
   // FIX #4: Persist every account change to Supabase (not just local state)

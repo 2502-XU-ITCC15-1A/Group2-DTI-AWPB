@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, Eye, Trash2 } from "lucide-react";
+import { generateApprovedEntryPdf } from "../services/pdfService";
 
 import AdminEntryReviewModal from "../components/admin/AdminEntryReviewModal";
 import AdminDeleteEntryModal from "../components/admin/AdminDeleteEntryModal";
@@ -52,6 +53,10 @@ function getStatusBadgeVariant(status) {
     default:
       return "outline";
   }
+}
+
+function isApprovedStatus(status) {
+  return String(status || "").trim().toLowerCase() === "approved";
 }
 
 export default function AdminReview({
@@ -139,6 +144,25 @@ export default function AdminReview({
         type: "success",
       }
     );
+  };
+
+  const handleGenerateApprovedEntry = async (entry) => {
+    if (!isApprovedStatus(entry.status)) return;
+
+    try {
+      const { filename } = await generateApprovedEntryPdf(entry);
+      onShowToast?.({
+        title: "PDF generated",
+        description: `${filename} is ready for printing.`,
+        type: "success",
+      });
+    } catch {
+      onShowToast?.({
+        title: "PDF generation failed",
+        description: "Could not generate the approved entry PDF.",
+        type: "error",
+      });
+    }
   };
 
   const handleReturn = (note) => {
@@ -387,6 +411,7 @@ export default function AdminReview({
         onApprove={handleApprove}
         onReturn={handleReturn}
         onReject={handleReject}
+        onGenerateApprovedEntry={handleGenerateApprovedEntry}
       />
 
       <AdminDeleteEntryModal

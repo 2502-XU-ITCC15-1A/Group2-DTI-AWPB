@@ -47,19 +47,3 @@ CREATE POLICY "Admins delete any entry" ON awpb_entries
 CREATE TRIGGER update_awpb_entries_updated_at
     BEFORE UPDATE ON awpb_entries
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- Insert admin profile (uses ON CONFLICT so it's safe to re-run)
-INSERT INTO profiles (id, username, full_name, email, role, status)
-VALUES (
-    '9aac5906-89c6-4355-acbf-ff51cdc09dde',
-    'adm_admin',
-    'Default Admin',
-    'adm_admin@dti.gov.ph',
-    'admin',
-    'active'
-) ON CONFLICT (id) DO UPDATE SET
-    username = EXCLUDED.username,
-    full_name = EXCLUDED.full_name,
-    email = EXCLUDED.email,
-    role = EXCLUDED.role,
-    status = EXCLUDED.status;

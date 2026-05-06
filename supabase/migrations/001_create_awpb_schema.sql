@@ -90,7 +90,7 @@ CREATE TABLE entries (
     submission_date TIMESTAMPTZ,
     review_date TIMESTAMPTZ,
     reviewer_id UUID REFERENCES profiles(id), -- Nullable
-    reviewer_notes TEXT,
+    admin_comment TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -177,14 +177,18 @@ INSERT INTO submission_windows (title, start_date, end_date, is_active) VALUES
 -- Create view for template hierarchy (for frontend consumption)
 CREATE VIEW template_hierarchy AS
 SELECT 
+    c.id as component_id,
     c.name as component,
     c.code as component_code,
+    sc.id as sub_component_id,
     sc.name as sub_component,
     sc.code as sub_component_code,
+    ka.id as key_activity_id,
     ka.name as key_activity,
     ka.code as key_activity_code,
     ka.activity_no,
     ka.performance_indicator,
+    sa.id as sub_activity_id,
     sa.name as sub_activity,
     sa.code as sub_activity_code,
     ka.sort_order
@@ -210,5 +214,5 @@ LEFT JOIN monthly_targets mt ON e.id = mt.entry_id
 GROUP BY e.id, e.owner_id, e.unit_id, e.planning_year, e.component_id, 
          e.sub_component_id, e.key_activity_id, e.sub_activity_id,
          e.title_of_activities, e.unit_cost, e.status, e.submission_date,
-         e.review_date, e.reviewer_id, e.reviewer_notes, e.created_at, e.updated_at
+         e.review_date, e.reviewer_id, e.admin_comment, e.created_at, e.updated_at
 ORDER BY e.created_at DESC;

@@ -34,8 +34,11 @@ function getStatusClasses(status) {
   }
 }
 
-export default function EntryDetailsModal({ entry, onClose }) {
+export default function EntryDetailsModal({ entry, onClose, onExportToPdf }) {
   if (!entry) return null
+
+  const isApprovedStatus =
+    String(entry.status || "").trim().toLowerCase() === "approved"
 
   const activeMonthlyRows =
     entry.monthlyBreakdown?.filter((row) => row.target > 0) || []
@@ -83,6 +86,18 @@ export default function EntryDetailsModal({ entry, onClose }) {
               {entry.status}
             </span>
           </div>
+
+          {isApprovedStatus && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => onExportToPdf?.(entry)}
+                className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
+              >
+                Export to PDF
+              </button>
+            </div>
+          )}
 
           {(entry.status === "Returned" || entry.status === "Rejected") &&
             entry.adminComment && (

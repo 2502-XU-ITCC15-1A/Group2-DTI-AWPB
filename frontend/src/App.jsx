@@ -3,8 +3,11 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AppLayout from "./components/layout/AppLayout";
 import initialTemplateData from "./data/awpb_dropdown_tree.json";
 
+import { getTemplateHierarchy } from "./services/templateService";
+
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
+import ConfirmPassword from "./pages/ConfirmPassword";
 import Home from "./pages/Home";
 import MyEntries from "./pages/MyEntries";
 import SubmitEntry from "./pages/SubmitEntry";
@@ -33,8 +36,46 @@ function App() {
   const [entryBeingEdited, setEntryBeingEdited] = useState(null);
   const [submitEntryDraft, setSubmitEntryDraft] = useState(null);
   const [accounts, setAccounts] = useState(INITIAL_ACCOUNTS);
-  const [templateData, setTemplateData] = useState(createInitialTemplateState);
-  const [submissionWindow, setSubmissionWindow] = useState(null);
+  const [templateData, setTemplateData] = useState({ hierarchy: {} });
+
+  const [submissionWindow, setSubmissionWindow] = useState({
+    startDate: "2026-04-01",
+    endDate: "2026-04-30",
+  });
+
+  useEffect(() => {
+  loadTemplate();
+}, []);
+
+async function loadTemplate() {
+  const { data, error } = await getTemplateHierarchy();
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  const hierarchy = {};
+
+  data.forEach((row) => {
+    const c = row.component;
+    const s = row.sub_component;
+    const k = row.key_activity;
+
+    if (!hierarchy[c]) hierarchy[c] = {};
+    if (!hierarchy[c][s]) hierarchy[c][s] = {};
+    if (!hierarchy[c][s][k]) hierarchy[c][s][k] = [];
+
+    hierarchy[c][s][k].push({
+      no: row.no,
+      performanceIndicator: row.performance_indicator,
+      subActivities: row.sub_activity ? [row.sub_activity] : [],
+    });
+  });
+
+  setTemplateData({ hierarchy });
+}
+
   const [authUser, setAuthUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [toast, setToast] = useState(null);
@@ -173,6 +214,7 @@ function App() {
         description: `Status changed to ${updated.status}.`,
         type: "success",
       });
+      return updated;
     } catch (error) {
       console.error("Failed to update entry:", error);
       showToast({
@@ -180,6 +222,7 @@ function App() {
         description: error.message,
         type: "error",
       });
+      throw error;
     }
   };
 
@@ -252,7 +295,11 @@ function App() {
     }
   };
 
-  const handleUpdateAccount = (accountId, updates) => {
+  const handleUpdateAccount = (accountId, updates, fullList = null) => {
+    if (fullList) {
+      setAccounts(fullList);
+      return;
+    }
     setAccounts((prev) =>
       prev.map((account) => (account.id === accountId ? { ...account, ...updates } : account))
     );
@@ -353,7 +400,8 @@ function App() {
     return (
       <Routes>
         <Route path="/login" element={<Login onLogin={handleLogin} accounts={accounts} />} />
-        <Route path="/forgot-password" element={<ForgotPassword accounts={accounts} />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/confirm-password" element={<ConfirmPassword />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -371,6 +419,7 @@ function App() {
       <Routes>
         <Route path="/login" element={<Navigate to={currentRole === "admin" ? "/admin/dashboard" : "/"} replace />} />
         <Route path="/forgot-password" element={<Navigate to={currentRole === "admin" ? "/admin/dashboard" : "/"} replace />} />
+        <Route path="/confirm-password" element={<Navigate to={currentRole === "admin" ? "/admin/dashboard" : "/"} replace />} />
         <Route path="/" element={currentRole === "encoder" ? <Home entries={encoderEntries} submissionWindow={submissionWindow} /> : <Navigate to="/admin/dashboard" replace />} />
         <Route path="/entries" element={currentRole === "encoder" ? <MyEntries entries={encoderEntries} onEditEntry={handleStartEdit} onDeleteEntry={handleDeleteEntry} onShowToast={showToast} submissionWindow={submissionWindow} /> : <Navigate to="/admin/dashboard" replace />} />
         <Route path="/submit" element={currentRole === "encoder" ? <SubmitEntry onAddEntry={handleAddEntry} entryToEdit={entryBeingEdited} onSaveEditedEntry={handleSaveEditedEntry} clearEditingEntry={clearEditingEntry} submissionWindow={submissionWindow} draftState={submitEntryDraft} onDraftChange={setSubmitEntryDraft} onClearDraft={clearSubmitEntryDraft} currentUser={authUser} templateData={templateData} /> : <Navigate to="/admin/dashboard" replace />} />
