@@ -461,9 +461,87 @@ export const entriesService = {
 // Template services (read-only)
 export const templateService = {
   async getHierarchy() {
-    const { data, error } = await supabase.from('template_hierarchy').select('*');
-    if (error) throw error;
-    return data;
+    // Query individual tables instead of the view, because the view
+    // does not join the separate performance_indicators table.
+    const [compRes, scRes, kaRes, piRes, saRes] = await Promise.all([
+      supabase.from('components').select('id, name').eq('is_active', true).order('sort_order'),
+      supabase.from('sub_components').select('id, name, component_id').eq('is_active', true).order('sort_order'),
+      supabase.from('key_activities').select('id, name, sub_component_id').eq('is_active', true).order('sort_order'),
+      supabase.from('performance_indicators').select('id, key_activity_id, activity_no, label, sort_order').eq('is_active', true).order('sort_order'),
+      supabase.from('sub_activities').select('id, name, performance_indicator_id').eq('is_active', true).order('sort_order'),
+    ]);
+
+    if (compRes.error) throw compRes.error;
+    if (scRes.error) throw scRes.error;
+    if (kaRes.error) throw kaRes.error;
+    if (piRes.error) throw piRes.error;
+    if (saRes.error) throw saRes.error;
+
+    // Build lookup maps
+    const compMap = Object.fromEntries(compRes.data.map((c) => [c.id, c]));
+    const scMap = Object.fromEntries(scRes.data.map((sc) => [sc.id, sc]));
+    const kaMap = Object.fromEntries(kaRes.data.map((ka) => [ka.id, ka]));
+
+    // Group performance_indicators by key_activity_id
+    const piByKa = {};
+    for (const pi of piRes.data) {
+      if (!piByKa[pi.key_activity_id]) piByKa[pi.key_activity_id] = [];
+      piByKa[pi.key_activity_id].push(pi);
+    }
+
+    // Group sub_activities by performance_indicator_id
+    const saByPi = {};
+    for (const sa of saRes.data) {
+      if (!saByPi[sa.performance_indicator_id]) saByPi[sa.performance_indicator_id] = [];
+      saByPi[sa.performance_indicator_id].push(sa);
+    }
+
+    // Build flat rows that match the structure the frontend expects
+    const rows = [];
+
+    for (const ka of kaRes.data) {
+      const sc = scMap[ka.sub_component_id];
+      if (!sc) continue;
+      const comp = compMap[sc.component_id];
+      if (!comp) continue;
+
+      const pis = piByKa[ka.id] || [];
+      if (pis.length === 0) {
+        // Key activity with no performance indicators yet — emit placeholder row
+        rows.push({
+          component: comp.name, component_id: comp.id,
+          sub_component: sc.name, sub_component_id: sc.id,
+          key_activity: ka.name, key_activity_id: ka.id,
+          activity_no: null, label: null,
+          sub_activity: null, sub_activity_id: null,
+        });
+      } else {
+        for (const pi of pis) {
+          const subs = saByPi[pi.id] || [];
+          if (subs.length === 0) {
+            rows.push({
+              component: comp.name, component_id: comp.id,
+              sub_component: sc.name, sub_component_id: sc.id,
+              key_activity: ka.name, key_activity_id: ka.id,
+              activity_no: pi.activity_no, label: pi.label,
+              sub_activity: null, sub_activity_id: null,
+            });
+          } else {
+            for (const sa of subs) {
+              rows.push({
+                component: comp.name, component_id: comp.id,
+                sub_component: sc.name, sub_component_id: sc.id,
+                key_activity: ka.name, key_activity_id: ka.id,
+                activity_no: pi.activity_no, label: pi.label,
+                sub_activity: sa.name, sub_activity_id: sa.id,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    return rows;
   },
 
   async getUnits() {
@@ -677,7 +755,7 @@ export const templateMgmtService = {
     const { data: result, error } = await supabase
       .from('sub_activities')
       .insert({
-        key_activity_id: data.key_activity_id,
+        performance_indicator_id: data.performance_indicator_id,
         name: data.name,
         code: data.code,
         sort_order: data.sort_order,
