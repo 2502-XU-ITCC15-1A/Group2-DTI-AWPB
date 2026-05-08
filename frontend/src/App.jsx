@@ -25,7 +25,7 @@ import {
   realtimeService,
 } from "./services/supabaseService";
 
-const INITIAL_ACCOUNTS = []; // will be replaced by Supabase data
+const INITIAL_ACCOUNTS = [];
 
 function createInitialTemplateState() {
   return JSON.parse(JSON.stringify(initialTemplateData));
@@ -61,35 +61,85 @@ async function loadTemplate() {
     const c = row.component;
     const s = row.sub_component;
     const k = row.key_activity;
+    const actNo = row.activity_no ?? row.no;
+    const piText = row.performance_indicator || row.label || "";
 
+    if (!c) return;
     if (!hierarchy[c]) hierarchy[c] = {};
+    if (!s) return;
     if (!hierarchy[c][s]) hierarchy[c][s] = {};
+    if (!k) return;
     if (!hierarchy[c][s][k]) hierarchy[c][s][k] = [];
 
-    hierarchy[c][s][k].push({
-      no: row.no,
-      performanceIndicator: row.performance_indicator,
-      subActivities: row.sub_activity ? [row.sub_activity] : [],
-    });
+    // Skip rows without an activity number (placeholder key-activity rows)
+    if (!actNo) return;
+
+    // Find or create the entry grouped by activity_no
+    const bucket = hierarchy[c][s][k];
+    let entry = bucket.find((item) => String(item.no) === String(actNo));
+    if (!entry) {
+      entry = { no: actNo, performanceIndicator: piText, subActivities: [] };
+      bucket.push(entry);
+    }
+
+    // Add sub-activity if present and not already tracked
+    if (row.sub_activity && !entry.subActivities.includes(row.sub_activity)) {
+      entry.subActivities.push(row.sub_activity);
+    }
   });
 
   setTemplateData({ hierarchy });
 }
 
   const [authUser, setAuthUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [toast, setToast] = useState(null);
   const toastTimeoutRef = useRef(null);
   const toastDismissRef = useRef(null);
 
-  // ------------------------------------------------------------
-  // 1. Load data from Supabase on mount
-  // ------------------------------------------------------------
+  // Restore session on page load / listen for auth changes
   useEffect(() => {
     let cancelled = false;
 
+    const restoreSession = async () => {
+      try {
+        const user = await authService.getCurrentUser();
+        if (user && !cancelled) {
+          const profile = await authService.getProfile(user.id);
+          setAuthUser({
+            id: user.id,
+            username: profile.username,
+            email: profile.email,
+            fullName: profile.full_name,
+            role: profile.role,
+            status: profile.status,
+          });
+        }
+      } catch (err) {
+        // No active session — stay on login
+      } finally {
+        if (!cancelled) setAuthLoading(false);
+      }
+    };
+
+    restoreSession();
+
+    const { data: { subscription } } = authService.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setAuthUser(null);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
     const loadData = async () => {
       try {
-        // Load active submission window
         const windowData = await submissionService.getActiveWindow();
         if (!cancelled) {
           setSubmissionWindow({
@@ -100,8 +150,6 @@ async function loadTemplate() {
             is_active: windowData.is_active,
           });
         }
-
-        // Load all profiles (accounts)
         const profiles = await usersService.getAll();
         if (!cancelled) {
           const formattedAccounts = profiles.map((profile) => ({
@@ -114,8 +162,6 @@ async function loadTemplate() {
           }));
           setAccounts(formattedAccounts);
         }
-
-        // Load entries (RLS will restrict based on role)
         const entriesData = await entriesService.getAll();
         if (!cancelled) {
           setEntries(entriesData);
@@ -129,72 +175,39 @@ async function loadTemplate() {
         });
       }
     };
-
     loadData();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
-  // ------------------------------------------------------------
-  // 2. Real‑time subscription for entries
-  // ------------------------------------------------------------
   useEffect(() => {
-    const subscription = realtimeService.subscribeToEntries(async (payload) => {
+    const subscription = realtimeService.subscribeToEntries((payload) => {
       const { eventType, new: newRecord, old: oldRecord } = payload;
-
       if (eventType === "INSERT") {
-        try {
-          const created = await entriesService.getById(newRecord.id);
-          setEntries((prev) =>
-            prev.some((entry) => entry.id === created.id)
-              ? prev.map((entry) => (entry.id === created.id ? created : entry))
-              : [created, ...prev]
-          );
-        } catch (error) {
-          console.error("Failed to load realtime entry:", error);
-        }
+        setEntries((prev) => [newRecord, ...prev]);
       } else if (eventType === "UPDATE") {
-        try {
-          const updated = await entriesService.getById(newRecord.id);
-          setEntries((prev) =>
-            prev.map((entry) => (entry.id === updated.id ? updated : entry))
-          );
-        } catch (error) {
-          console.error("Failed to load realtime entry update:", error);
-        }
+        setEntries((prev) => prev.map((entry) => (entry.id === newRecord.id ? newRecord : entry)));
       } else if (eventType === "DELETE") {
-        setEntries((prev) =>
-          prev.filter((entry) => entry.id !== oldRecord.id)
-        );
+        setEntries((prev) => prev.filter((entry) => entry.id !== oldRecord.id));
       }
     });
-
     return () => subscription.unsubscribe();
   }, []);
 
-  // ------------------------------------------------------------
-  // 3. Auth helpers
-  // ------------------------------------------------------------
   const isAuthenticated = Boolean(authUser);
   const currentRole = authUser?.role || null;
 
   const encoderEntries = useMemo(() => {
     if (!authUser?.id) return [];
-    return entries.filter((entry) => entry.owner_id === authUser.id);
+    return entries.filter((entry) => entry.ownerId === authUser.id);
   }, [authUser?.id, entries]);
 
-  // ------------------------------------------------------------
-  // 4. Handlers that persist to Supabase
-  // ------------------------------------------------------------
   const handleAddEntry = async (newEntry) => {
     try {
       const created = await entriesService.create(newEntry);
       setEntries((prev) => [created, ...prev]);
       showToast({
         title: "Entry submitted",
-        description: `${created.title_of_activities} was submitted.`,
+        description: `${created.titleOfActivities} was submitted.`,
         type: "success",
       });
     } catch (error) {
@@ -210,9 +223,7 @@ async function loadTemplate() {
   const handleUpdateEntry = async (entryId, updates) => {
     try {
       const updated = await entriesService.update(entryId, updates);
-      setEntries((prev) =>
-        prev.map((entry) => (entry.id === entryId ? updated : entry))
-      );
+      setEntries((prev) => prev.map((entry) => (entry.id === entryId ? updated : entry)));
       showToast({
         title: "Entry updated",
         description: `Status changed to ${updated.status}.`,
@@ -280,13 +291,23 @@ async function loadTemplate() {
     }
   };
 
-  // Account management (optional – you can keep the local mock or implement real API)
-  // For now we keep the existing handlers that modify local state (they don't touch Supabase).
-  // To fully integrate, you would need a service role key or edge functions.
-  // I'll leave them as they were, but you can expand later.
-
-  const handleAddAccount = (newAccount) => {
-    setAccounts((prev) => [newAccount, ...prev]);
+  const handleAddAccount = async (newAccount) => {
+    // Reload all accounts from Supabase to get the full list with proper IDs
+    try {
+      const profiles = await usersService.getAll();
+      const formattedAccounts = profiles.map((profile) => ({
+        id: profile.id,
+        username: profile.username,
+        fullName: profile.full_name,
+        email: profile.email,
+        role: profile.role,
+        status: profile.status,
+      }));
+      setAccounts(formattedAccounts);
+    } catch (err) {
+      // Fallback: just add to local state
+      setAccounts((prev) => [newAccount, ...prev]);
+    }
   };
 
   const handleUpdateAccount = (accountId, updates, fullList = null) => {
@@ -295,23 +316,16 @@ async function loadTemplate() {
       return;
     }
     setAccounts((prev) =>
-      prev.map((account) =>
-        account.id === accountId ? { ...account, ...updates } : account
-      )
+      prev.map((account) => (account.id === accountId ? { ...account, ...updates } : account))
     );
   };
 
-  // ------------------------------------------------------------
-  // 5. Toast helpers (unchanged)
-  // ------------------------------------------------------------
   const showToast = ({ title, description = "", type = "info" }) => {
     const id = Date.now();
     setToast({ id, title, description, type, exiting: false });
     window.clearTimeout(toastTimeoutRef.current);
     window.clearTimeout(toastDismissRef.current);
-    toastTimeoutRef.current = window.setTimeout(() => {
-      dismissToast(id);
-    }, 2600);
+    toastTimeoutRef.current = window.setTimeout(() => { dismissToast(id); }, 2600);
   };
 
   const dismissToast = (toastId) => {
@@ -325,12 +339,8 @@ async function loadTemplate() {
     }, 220);
   };
 
-  // ------------------------------------------------------------
-  // 6. Login / Logout
-  // ------------------------------------------------------------
   const handleLogin = (user) => {
     setAuthUser(user);
-    // Reload data to ensure we have the correct entries for the user
     const reloadData = async () => {
       try {
         const entriesData = await entriesService.getAll();
@@ -342,22 +352,22 @@ async function loadTemplate() {
     reloadData();
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await authService.signOut();
+    } catch (err) {
+      console.error("Sign out error:", err);
+    }
     setAuthUser(null);
     setEntryBeingEdited(null);
     setSubmitEntryDraft(null);
   };
 
-  // ------------------------------------------------------------
-  // 7. Edit / Draft helpers
-  // ------------------------------------------------------------
   const handleStartEdit = (entry) => {
     setEntryBeingEdited(entry);
   };
 
   const handleSaveEditedEntry = async (entryId, updatedEntry) => {
-    // This is called after the encoder resubmits a returned entry.
-    // We can reuse handleUpdateEntry.
     await handleUpdateEntry(entryId, updatedEntry);
     setEntryBeingEdited(null);
   };
@@ -370,9 +380,6 @@ async function loadTemplate() {
     setSubmitEntryDraft(null);
   };
 
-  // ------------------------------------------------------------
-  // 8. Navigation items
-  // ------------------------------------------------------------
   const navItems = useMemo(() => {
     if (currentRole === "admin") {
       return [
@@ -396,9 +403,14 @@ async function loadTemplate() {
     ];
   }, [currentRole]);
 
-  // ------------------------------------------------------------
-  // 9. Render
-  // ------------------------------------------------------------
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-slate-500">Loading...</p>
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
     return (
       <Routes>
@@ -417,142 +429,20 @@ async function loadTemplate() {
       currentUser={authUser}
       onLogout={handleLogout}
       toast={toast}
-      onDismissToast={() => {
-        if (toast?.id) dismissToast(toast.id);
-      }}
+      onDismissToast={() => { if (toast?.id) dismissToast(toast.id); }}
     >
       <Routes>
-        <Route
-          path="/login"
-          element={<Navigate to={currentRole === "admin" ? "/admin/dashboard" : "/"} replace />}
-        />
-        <Route
-          path="/forgot-password"
-          element={<Navigate to={currentRole === "admin" ? "/admin/dashboard" : "/"} replace />}
-        />
-        <Route
-          path="/confirm-password"
-          element={<Navigate to={currentRole === "admin" ? "/admin/dashboard" : "/"} replace />}
-        />
-        <Route
-          path="/"
-          element={
-            currentRole === "encoder" ? (
-              <Home entries={encoderEntries} submissionWindow={submissionWindow} />
-            ) : (
-              <Navigate to="/admin/dashboard" replace />
-            )
-          }
-        />
-        <Route
-          path="/entries"
-          element={
-            currentRole === "encoder" ? (
-              <MyEntries
-                entries={encoderEntries}
-                onEditEntry={handleStartEdit}
-                onDeleteEntry={handleDeleteEntry}
-                onShowToast={showToast}
-                submissionWindow={submissionWindow}
-              />
-            ) : (
-              <Navigate to="/admin/dashboard" replace />
-            )
-          }
-        />
-        <Route
-          path="/submit"
-          element={
-            currentRole === "encoder" ? (
-              <SubmitEntry
-                onAddEntry={handleAddEntry}
-                entryToEdit={entryBeingEdited}
-                onSaveEditedEntry={handleSaveEditedEntry}
-                clearEditingEntry={clearEditingEntry}
-                submissionWindow={submissionWindow}
-                draftState={submitEntryDraft}
-                onDraftChange={setSubmitEntryDraft}
-                onClearDraft={clearSubmitEntryDraft}
-                currentUser={authUser}
-                templateData={templateData}
-              />
-            ) : (
-              <Navigate to="/admin/dashboard" replace />
-            )
-          }
-        />
-        <Route
-          path="/admin/manage-template"
-          element={
-            currentRole === "admin" ? (
-              <ManageTemplate
-                templateData={templateData}
-                onUpdateTemplateData={setTemplateData}
-                onResetTemplate={() => setTemplateData(createInitialTemplateState())}
-                onShowToast={showToast}
-              />
-            ) : (
-              <Navigate to="/" replace />
-            )
-          }
-        />
-        <Route
-          path="/admin/dashboard"
-          element={
-            currentRole === "admin" ? (
-              <AdminDashboard
-                entries={entries}
-                submissionWindow={submissionWindow}
-                onUpdateSubmissionWindow={handleUpdateSubmissionWindow}
-              />
-            ) : (
-              <Navigate to="/" replace />
-            )
-          }
-        />
-        <Route
-          path="/admin/review"
-          element={
-            currentRole === "admin" ? (
-              <AdminReview
-                entries={entries}
-                onUpdateEntry={handleUpdateEntry}
-                onDeleteEntry={handleDeleteEntry}
-                onShowToast={showToast}
-              />
-            ) : (
-              <Navigate to="/" replace />
-            )
-          }
-        />
-        <Route
-          path="/admin/manage-accounts"
-          element={
-            currentRole === "admin" ? (
-              <ManageAccounts
-                accounts={accounts}
-                onUpdateAccount={handleUpdateAccount}
-                onShowToast={showToast}
-              />
-            ) : (
-              <Navigate to="/" replace />
-            )
-          }
-        />
-        <Route
-          path="/admin/manage-accounts/new"
-          element={
-            currentRole === "admin" ? (
-              <AddNewAccount
-                accounts={accounts}
-                onAddAccount={handleAddAccount}
-                onShowToast={showToast}
-              />
-            ) : (
-              <Navigate to="/" replace />
-            )
-          }
-        />
+        <Route path="/login" element={<Navigate to={currentRole === "admin" ? "/admin/dashboard" : "/"} replace />} />
+        <Route path="/forgot-password" element={<Navigate to={currentRole === "admin" ? "/admin/dashboard" : "/"} replace />} />
+        <Route path="/confirm-password" element={<Navigate to={currentRole === "admin" ? "/admin/dashboard" : "/"} replace />} />
+        <Route path="/" element={currentRole === "encoder" ? <Home entries={encoderEntries} submissionWindow={submissionWindow} /> : <Navigate to="/admin/dashboard" replace />} />
+        <Route path="/entries" element={currentRole === "encoder" ? <MyEntries entries={encoderEntries} onEditEntry={handleStartEdit} onDeleteEntry={handleDeleteEntry} onShowToast={showToast} submissionWindow={submissionWindow} /> : <Navigate to="/admin/dashboard" replace />} />
+        <Route path="/submit" element={currentRole === "encoder" ? <SubmitEntry onAddEntry={handleAddEntry} entryToEdit={entryBeingEdited} onSaveEditedEntry={handleSaveEditedEntry} clearEditingEntry={clearEditingEntry} submissionWindow={submissionWindow} draftState={submitEntryDraft} onDraftChange={setSubmitEntryDraft} onClearDraft={clearSubmitEntryDraft} currentUser={authUser} templateData={templateData} /> : <Navigate to="/admin/dashboard" replace />} />
+        <Route path="/admin/manage-template" element={currentRole === "admin" ? <ManageTemplate templateData={templateData} onUpdateTemplateData={setTemplateData} onResetTemplate={() => setTemplateData(createInitialTemplateState())} onShowToast={showToast} /> : <Navigate to="/" replace />} />
+        <Route path="/admin/dashboard" element={currentRole === "admin" ? <AdminDashboard entries={entries} submissionWindow={submissionWindow} onUpdateSubmissionWindow={handleUpdateSubmissionWindow} /> : <Navigate to="/" replace />} />
+        <Route path="/admin/review" element={currentRole === "admin" ? <AdminReview entries={entries} onUpdateEntry={handleUpdateEntry} onDeleteEntry={handleDeleteEntry} onShowToast={showToast} /> : <Navigate to="/" replace />} />
+        <Route path="/admin/manage-accounts" element={currentRole === "admin" ? <ManageAccounts accounts={accounts} onUpdateAccount={handleUpdateAccount} onShowToast={showToast} /> : <Navigate to="/" replace />} />
+        <Route path="/admin/manage-accounts/new" element={currentRole === "admin" ? <AddNewAccount accounts={accounts} onAddAccount={handleAddAccount} onShowToast={showToast} /> : <Navigate to="/" replace />} />
       </Routes>
     </AppLayout>
   );

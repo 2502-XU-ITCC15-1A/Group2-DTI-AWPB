@@ -1,54 +1,23 @@
 services:
-  # Backend API (Node.js/Express)
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: awpb-backend
-    environment:
-      NODE_ENV: production
-      PORT: 5000
-
-
-      # USE SUPABASE DB
-      DATABASE_URL: postgresql://postgres.engimvovjhbuozskneys:DTI-AWPB!-12@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres
-
-
-      JWT_SECRET: ${JWT_SECRET:-your_jwt_secret_key_here}
-      GOOGLE_SHEETS_API_KEY: ${GOOGLE_SHEETS_API_KEY}
-      GOOGLE_SHEETS_SPREADSHEET_ID: ${GOOGLE_SHEETS_SPREADSHEET_ID}
-
-
-    ports:
-      - "5000:5000"
-    networks:
-      - awpb-network
-    restart: unless-stopped
-
-
-  # Frontend (React)
+  # Frontend (React + Vite) — connects to hosted Supabase for database & auth
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: awpb-frontend
     environment:
-      VITE_API_URL: http://localhost:5000/api
-
-
-      # ADD SUPABASE ENV
-      VITE_SUPABASE_URL: https://engimvovjhbuozskneys.supabase.co
-      VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVuZ2ltdm92amhidW96c2tuZXlzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzNzE1MjcsImV4cCI6MjA5MTk0NzUyN30.PKo0hXy0_8zZClNJrqZieSQcGU2tL1yNdp_NLQhbfWA
-
-
+      VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+      VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
     ports:
       - "5173:5173"
-    depends_on:
-      - backend
     networks:
       - awpb-network
     restart: unless-stopped
-
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5173"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 networks:
   awpb-network:
