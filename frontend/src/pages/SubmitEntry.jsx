@@ -42,7 +42,7 @@ function buildTemplateDataFromSupabase(hierarchyRows, unitRows) {
       component, component_id,
       sub_component, sub_component_id,
       key_activity, key_activity_id,
-      activity_no, performance_indicator, 
+      activity_no, label, 
       sub_activity, sub_activity_id 
     } = row;
 
@@ -68,7 +68,7 @@ function buildTemplateDataFromSupabase(hierarchyRows, unitRows) {
     if (!entry) {
       entry = {
         no: activity_no,
-        performanceIndicator: performance_indicator || "",
+        performanceIndicator: label || "",
         subActivities: [],
       };
       bucket.push(entry);
