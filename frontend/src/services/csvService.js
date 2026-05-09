@@ -83,7 +83,11 @@ export const csvExportService = {
                 amount: amount
             }
           })
-            
+
+          const flattenedBreakdown = {}
+          for (const item of monthlyBreakdown) {
+            flattenedBreakdown[item.month] = item.amount;
+          }
 
           // Calculate grand total from monthly breakdown
           const grandTotal = monthlyBreakdown.reduce((sum, m) => sum + (m.amount || 0), 0);
