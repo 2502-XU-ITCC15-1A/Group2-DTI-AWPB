@@ -17,26 +17,6 @@ const MONTHS_LIST = [
     'dec'
 ]
 
-function formatCurrency(value) {
-  return new Intl.NumberFormat("en-PH", {
-    style: "currency",
-    currency: "PHP",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value || 0);
-}
-
-function formatDate(value) {
-  if (!value) return "N/A";
-  return new Date(value).toLocaleString("en-PH", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
 // CSV Export Service
 export const csvExportService = {
   /**
