@@ -192,7 +192,7 @@ export default function AdminDashboard({
 
     approvedEntries.forEach((entry) => {
       entry.monthlyBreakdown?.forEach((item) => {
-        const monthIndex = MONTHS.findIndex((month) => month.key === item.month);
+        const monthIndex = MONTHS.findIndex((month) => month.label === item.month);
         if (monthIndex >= 0) {
           totals[monthIndex].amount += Number(item.amount || 0);
         }
