@@ -286,13 +286,13 @@ export const entriesService = {
     console.log("=== CREATING ENTRY ===");
     console.log("Entry data received:", entryData);
     
-    // Helper function to find ID by name
-    const findUnitId = async (name) => {
-      const { data } = await supabase
+    const findUnitId = async (identifier) => {
+      const { data, error } = await supabase
         .from('units')
         .select('id')
-        .eq('name', name)
+        .or(`code.eq.${identifier},name.eq.${identifier}`)
         .maybeSingle();
+      if (error) console.error('Unit lookup error:', error);
       return data?.id;
     };
     
