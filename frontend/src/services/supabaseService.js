@@ -38,7 +38,7 @@ export const authService = {
     return data;
   },
 
-  async setSessionFromTokens(accessToken, refreshToken) {
+  async setRecoverySession(accessToken, refreshToken) {
     const { data, error } = await supabase.auth.setSession({
       access_token: accessToken,
       refresh_token: refreshToken,
