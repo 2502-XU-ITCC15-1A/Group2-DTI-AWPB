@@ -93,14 +93,14 @@ export const csvExportService = {
           const grandTotal = monthlyBreakdown.reduce((sum, m) => sum + (m.amount || 0), 0);
 
           return {
-            unit: row.units?.name || '', // keep
-            component: row.components?.name || '', // keep
-            subComponent: row.sub_components?.name || '', // keep
-            keyActivity: row.key_activities?.name || '', // keep
-            no: row.key_activities?.activity_no || '', // keep
-            subActivity: row.sub_activities?.name || '', // keep
-            titleOfActivities: row.title_of_activities, // keep
-            monthlyBreakdown: monthlyBreakdown,
+            unit: row.units?.name || '', 
+            component: row.components?.name || '',
+            subComponent: row.sub_components?.name || '', 
+            keyActivity: row.key_activities?.name || '', 
+            no: row.key_activities?.activity_no || '', 
+            subActivity: row.sub_activities?.name || '', 
+            titleOfActivities: row.title_of_activities, 
+            monthlyBreakdown: flattenedBreakdown,
             grandTotal: grandTotal,
           };
         })
