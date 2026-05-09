@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Eye, Trash2 } from "lucide-react";
+import { Search, Eye, Trash2, PlusCircle, History, X } from "lucide-react";
 import { generateApprovedEntryPdf } from "../services/pdfService";
 
 import AdminEntryReviewModal from "../components/admin/AdminEntryReviewModal";
@@ -10,6 +10,7 @@ import { entriesService } from "../services/supabaseService";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+
 import {
   Select,
   SelectContent,
@@ -71,6 +72,12 @@ export default function AdminReview({
   const [statusFilter, setStatusFilter] = useState("all");
   const [unitFilter, setUnitFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("all");
+  const [totalBudget, setTotalBudget] = useState(0);
+  const [transactions, setTransactions] = useState([]);
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [budgetAmount, setBudgetAmount] = useState("");
+  const [budgetDesc, setBudgetDesc] = useState("");
 
   const entries = entriesProp;
 
@@ -128,10 +135,30 @@ export default function AdminReview({
     }
   };
 
-  const handleApprove = (note) => {
-    if (!selectedEntry) return;
-    const entryTitle = selectedEntry.titleOfActivities;
-    persistEntryUpdate(
+  const handleApprove = async (note) => {
+  if (!selectedEntry) return;
+  const entryAmount = selectedEntry.grandTotal || 0;
+  const entryTitle = selectedEntry.titleOfActivities;
+
+  if (entryAmount > totalBudget) {
+    onShowToast?.({
+      title: "Insufficient budget",
+      description: `Need ₱${entryAmount.toLocaleString()} but only ₱${totalBudget.toLocaleString()} available. Please add budget first.`,
+      type: "error",
+    });
+    return;
+  }
+  
+  try {
+    const { error: txError } = await supabase.from("budget_transactions").insert({
+      amount: entryAmount,
+      type: 'DEDUCTED',
+      description: `Approved: ${entryTitle}`,
+    });
+
+    if (txError) throw txError;
+    
+    await persistEntryUpdate(
       selectedEntry.id,
       {
         status: "Approved",
@@ -140,11 +167,22 @@ export default function AdminReview({
       },
       {
         title: "Entry approved",
-        description: `${entryTitle} was approved successfully.`,
+        description: `${entryTitle} was approved successfully. ₱${entryAmount.toLocaleString()} deducted from budget.`,
         type: "success",
       }
     );
-  };
+    
+    await loadBudgetData();
+    
+  } catch (err) {
+    console.error("Failed to approve entry:", err);
+    onShowToast?.({
+      title: "Could not approve entry",
+      description: err.message || "Please try again.",
+      type: "error",
+    });
+  }
+};
 
   const handleGenerateApprovedEntry = async (entry) => {
     if (!isApprovedStatus(entry.status)) return;
@@ -164,42 +202,97 @@ export default function AdminReview({
       });
     }
   };
+const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, newStatus) => {
+  try {
+    const { error } = await supabase.from("budget_transactions").insert({
+      amount: amount,
+      type: 'ADDED',
+      description: `REVERSAL: "${entryTitle}" changed from ${oldStatus} → ${newStatus}`,
+    });
+    
+    if (error) throw error;
+    
+    onShowToast?.({
+      title: "Budget restored",
+      description: `₱${amount.toLocaleString()} was added back to budget for: ${entryTitle}`,
+      type: "success",
+    });
+    
+    return true;
+  } catch (err) {
+    console.error("Failed to reverse budget deduction:", err);
+    onShowToast?.({
+      title: "Could not restore budget",
+      description: err.message || "Please check the transaction history.",
+      type: "error",
+    });
+    return false;
+  }
+};
 
-  const handleReturn = (note) => {
+  const handleReturn = async (note) => {
+  if (!selectedEntry) return;
+  const entryTitle = selectedEntry.titleOfActivities;
+  const oldStatus = selectedEntry.status;
+  const newStatus = "Returned";
+  const entryAmount = selectedEntry.grandTotal || 0;
+
+  // Check if it was approved and reverse budget if needed
+  if (isApprovedStatus(oldStatus)) {
+    console.log(`Entry was ${oldStatus}, reversing budget deduction of ₱${entryAmount.toLocaleString()}`);
+    const reversed = await reverseBudgetDeduction(selectedEntry.id, entryTitle, entryAmount, oldStatus, newStatus);
+    if (!reversed) {
+      return; // Stop if reversal failed
+    }
+  }
+
+  // Update the entry status (this runs for ALL returns, not just approved ones)
+  await persistEntryUpdate(
+    selectedEntry.id,
+    {
+      status: newStatus,
+      adminComment: note,
+      reviewedAt: new Date().toISOString(),
+    },
+    {
+      title: "Entry returned",
+      description: `${entryTitle} was returned for revision.${isApprovedStatus(oldStatus) ? ` ₱${entryAmount.toLocaleString()} restored to budget.` : ""}`,
+      type: "success",
+    }
+  );
+  
+  await loadBudgetData();
+};
+
+  const handleReject = async (note) => {
     if (!selectedEntry) return;
     const entryTitle = selectedEntry.titleOfActivities;
-    persistEntryUpdate(
-      selectedEntry.id,
-      {
-        status: "Returned",
-        adminComment: note,
-        reviewedAt: new Date().toISOString(),
-      },
-      {
-        title: "Entry returned",
-        description: `${entryTitle} was returned for revision.`,
-        type: "success",
-      }
-    );
-  };
+     const oldStatus = selectedEntry.status;
+      const newStatus = "Rejected";
+      const entryAmount = selectedEntry.grandTotal || 0;
 
-  const handleReject = (note) => {
-    if (!selectedEntry) return;
-    const entryTitle = selectedEntry.titleOfActivities;
-    persistEntryUpdate(
+      if(isApprovedStatus(oldStatus)) {
+         console.log(`Entry was ${oldStatus}, reversing budget deduction of ₱${entryAmount.toLocaleString()}`);
+    const reversed = await reverseBudgetDeduction(selectedEntry.id, entryTitle, entryAmount, oldStatus, newStatus);
+    if (!reversed) return;
+  }
+
+  await persistEntryUpdate(
       selectedEntry.id,
       {
-        status: "Rejected",
+        status: newStatus,
         adminComment: note,
         reviewedAt: new Date().toISOString(),
       },
       {
         title: "Entry rejected",
-        description: `${entryTitle} was rejected.`,
-        type: "success",
+        description: `${entryTitle} was rejected.${isApprovedStatus(oldStatus) ? ` ₱${entryAmount.toLocaleString()} restored to budget.` : ""}`,
+      type: "success",
       }
     );
+    await loadBudgetData();
   };
+    
 
   const clearFilters = () => {
     setSearchTerm("");
@@ -233,6 +326,72 @@ export default function AdminReview({
       });
     }
   };
+  //connects sa supabase
+  const loadBudgetData = async () => {
+    try {
+      const {data: txData, error: txError} = await supabase
+        .from("budget_transactions")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (txError) throw txError;
+
+        setTransactions(txData || []);
+        
+        //budget calculation 
+        let total = 0;
+        txData?.forEach((tx) => {
+        if (tx.type === 'ADDED') {
+          total += Number(tx.amount);
+        } else if (tx.type === 'DEDUCTED') {
+          total -= Number(tx.amount);
+      }
+    });  
+    setTotalBudget(total);
+    } catch (err) {
+      console.error("Failed to load budget transactions:", err);
+    }
+  };
+  // Add budget
+  const handleAddBudget = async () => {
+    const amount = parseFloat(budgetAmount);
+    if (!amount|| amount <= 0) {
+      onShowToast?.({
+        title: "Invalid amount",
+        description: "Please enter a valid budget amount.",
+        type: "error",
+      });
+      return;
+    }
+    try {
+      const { error } = await supabase.from("budget_transactions").insert({
+        amount: amount,
+        type: 'ADDED',
+        description: budgetDesc || 'Budget addition',
+      });
+
+      if (error) throw error;
+      await loadBudgetData();
+      setShowBudgetModal(false);
+      setBudgetAmount("");
+      setBudgetDesc("");
+      onShowToast({
+        title: "Budget added",
+        description: `₱${amount.toLocaleString()} added successfully.`,
+        type: "success",
+      });
+    } catch (err) {
+      console.error("Failed to add budget transaction:", err);
+      onShowToast({
+        title: "Could not add budget",
+        description: err.message || "Please try again.",
+        type: "error",
+      });
+    }
+      };
+      useEffect(() => {
+        loadBudgetData();
+      }, []);
 
   return (
     <div className="space-y-6">
@@ -244,6 +403,189 @@ export default function AdminReview({
           Review submitted AWPB entries and update their status.
         </p>
       </div>
+      
+       <Card className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg">
+    <CardContent className="p-5">
+    <div className="flex items-center justify-between">
+      <div className="space-y-1">
+        <p className="text-emerald-100 text-sm font-medium">TOTAL BUDGET</p>
+        <p className="text-3xl font-bold tracking-tight">
+            ₱{totalBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+</p>
+        <p className="text-emerald-100 text-xs">Available for approvals</p>
+      </div>
+      
+      <div className="flex gap-3">
+        <Button 
+          onClick={() => setShowBudgetModal(true)}
+          className="bg-white text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 shadow-md"
+        >
+          <PlusCircle className="h-4 w-4 mr-2" />
+          Add Budget
+        </Button>
+        
+        <Button 
+          onClick={() => setShowHistoryModal(true)}
+          variant="outline" 
+          className="border-white/30 text-emerald-700 hover:bg-white/10 hover:text-white"
+        >
+          <History className="h-6 w-4 mr-2" />
+          View Records
+        </Button>
+      </div>
+    </div>
+  </CardContent>
+</Card>
+
+{/* Add Budget Modal */}
+{showBudgetModal && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div className="bg-white rounded-xl shadow-2xl w-[450px]">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-4 rounded-t-xl flex justify-between items-center">
+        <div>
+          <h3 className="text-xl font-semibold text-white">Add Budget</h3>
+          <p className="text-emerald-100 text-sm mt-1">Increase available funds</p>
+        </div>
+        <button 
+          onClick={() => setShowBudgetModal(false)}
+          className="text-white hover:bg-white/20 rounded-lg p-1 transition"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+      
+      {/* Body */}
+      <div className="p-6 space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Amount (₱)</label>
+          <Input 
+            type="number" 
+            placeholder="0.00" 
+            value = {budgetAmount}
+            onChange={(e) => setBudgetAmount(e.target.value)}
+            className="text-lg font-medium"
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Description (optional)</label>
+          <Input 
+            type="text" 
+            placeholder="e.g., Budget realignment, Additional funds" 
+            value={budgetDesc}
+            onChange={(e) => setBudgetDesc(e.target.value)}
+          />
+        </div>
+        
+        <div className="flex gap-3 pt-4">
+          <Button 
+          onClick={handleAddBudget}
+          className="flex-1 bg-emerald-600 hover:bg-emerald-700">
+            Add Budget
+          </Button>
+          <Button 
+            onClick={() => setShowBudgetModal(false)} 
+            variant="outline" 
+            className="flex-1"
+          >
+            Cancel
+          </Button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* History Modal */}
+{showHistoryModal && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div className="bg-white rounded-xl shadow-2xl w-[700px] max-h-[600px] flex flex-col">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-4 rounded-t-xl flex justify-between items-center">
+        <div>
+          <h3 className="text-xl font-semibold text-white">Transaction History</h3>
+          <p className="text-emerald-100 text-sm mt-1">All budget movements</p>
+        </div>
+        <button 
+          onClick={() => setShowHistoryModal(false)}
+          className="text-white hover:bg-white/20 rounded-lg p-1 transition"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+      
+      {/* Balance Badge */}
+      <div className="px-6 pt-4 pb-2 border-b">
+        <div className="flex justify-end">
+          <Badge className="bg-emerald-100 text-emerald-700 border-0 text-base px-4 py-2">
+            Current Balance: ₱{totalBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </Badge>
+        </div>
+      </div>
+      
+      {/* Table */}
+      <div className="overflow-y-auto flex-1">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 sticky top-0">
+            <tr className="border-b">
+              <th className="px-6 py-3 text-left font-semibold text-slate-700">Date & Time</th>
+              <th className="px-6 py-3 text-left font-semibold text-slate-700">Type</th>
+              <th className="px-6 py-3 text-left font-semibold text-slate-700">Amount</th>
+              <th className="px-6 py-3 text-left font-semibold text-slate-700">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+           {transactions.length === 0 ? (
+    <tr>
+      <td colSpan="4" className="text-center py-12 text-slate-400">
+        <History className="h-12 w-12 mx-auto mb-3 opacity-50" />
+        <p>No transactions yet</p>
+        <p className="text-sm">Add budget to get started</p>
+      </td>
+    </tr>
+  ) : (
+    transactions.map((tx) => (
+      <tr key={tx.id} className="border-b hover:bg-slate-50">
+        <td className="px-6 py-3 text-slate-600">
+          {new Date(tx.created_at).toLocaleString()}
+        </td>
+        <td className="px-6 py-3">
+          <Badge className={tx.type === 'ADDED' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
+            {tx.type}
+          </Badge>
+        </td>
+        <td className={`px-6 py-3 font-semibold ${tx.type === 'ADDED' ? 'text-green-600' : 'text-red-600'}`}>
+          {tx.type === 'ADDED' ? '+' : '-'}₱{Number(tx.amount).toLocaleString()}
+        </td>
+        <td className="px-6 py-3 text-slate-600">{tx.description}</td>
+      </tr>
+    ))
+  )}
+          </tbody>
+        </table>
+        
+        {/* Empty State */}
+        {/* <div className="text-center py-12 text-slate-400">
+          <History className="h-12 w-12 mx-auto mb-3 opacity-50" />
+          <p>No transactions yet</p>
+          <p className="text-sm">Add budget to get started</p>
+        </div> */}
+      </div>
+      
+      {/* Footer */}
+      <div className="border-t p-4 bg-slate-50 rounded-b-xl">
+        <Button 
+          onClick={() => setShowHistoryModal(false)} 
+          variant="outline" 
+          className="w-full"
+        >
+          Close
+        </Button>
+      </div>
+    </div>
+  </div>
+)}
 
       <Card className="overflow-hidden border-0 shadow-[0_10px_24px_rgba(15,23,42,0.08)] gap-0 py-0">
         <CardHeader className="border-b bg-white px-6 pt-5 pb-4">
@@ -419,7 +761,9 @@ export default function AdminReview({
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         entry={deleteTarget}
         onConfirm={handleDelete}
+        
       />
     </div>
+
   );
 }
