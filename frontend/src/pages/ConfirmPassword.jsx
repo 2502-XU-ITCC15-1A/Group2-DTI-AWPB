@@ -30,7 +30,12 @@ export default function ConfirmPassword() {
         } else if (accessToken && refreshToken && type === "recovery") {
           await authService.setRecoverySession(accessToken, refreshToken);
         } else {
-          throw new Error("Invalid reset link. Please request a new password reset.");
+          // Supabase may have already auto-processed the recovery code.
+          // Check if there's an active session we can use.
+          const user = await authService.getCurrentUser();
+          if (!user) {
+            throw new Error("Invalid reset link. Please request a new password reset.");
+          }
         }
 
         if (isMounted) {
@@ -45,10 +50,14 @@ export default function ConfirmPassword() {
       }
     };
 
-    prepareRecoverySession();
+    // Small delay to let Supabase client finish processing the URL tokens
+    const timer = setTimeout(() => {
+      prepareRecoverySession();
+    }, 500);
 
     return () => {
       isMounted = false;
+      clearTimeout(timer);
     };
   }, [searchParams]);
 

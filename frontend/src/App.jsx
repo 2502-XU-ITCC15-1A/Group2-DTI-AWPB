@@ -93,6 +93,9 @@ async function loadTemplate() {
 
   const [authUser, setAuthUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [isRecoveryMode, setIsRecoveryMode] = useState(
+    () => window.location.pathname === '/confirm-password'
+  );
   const [toast, setToast] = useState(null);
   const toastTimeoutRef = useRef(null);
   const toastDismissRef = useRef(null);
@@ -102,6 +105,11 @@ async function loadTemplate() {
     let cancelled = false;
 
     const restoreSession = async () => {
+      // Skip auto-login when arriving via a password-reset link
+      if (isRecoveryMode) {
+        if (!cancelled) setAuthLoading(false);
+        return;
+      }
       try {
         const user = await authService.getCurrentUser();
         if (user && !cancelled) {
@@ -127,6 +135,10 @@ async function loadTemplate() {
     const { data: { subscription } } = authService.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') {
         setAuthUser(null);
+        setIsRecoveryMode(false);
+      }
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsRecoveryMode(true);
       }
     });
 
