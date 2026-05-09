@@ -151,8 +151,8 @@ export const csvExportService = {
       'Sub Activity': entry.subActivity,
       'Title of Activities': entry.titleOfActivities,
       // Monthly breakdown as JSON string for CSV compatibility
-      'Monthly Breakdown': JSON.stringify(entry.monthlyBreakdown),
-      'Grand Total': formatCurrency(entry.grandTotal),
+      ...entry.monthlyBreakdown,
+      'Grand Total': entry.grandTotal,
     }));
   },
 
