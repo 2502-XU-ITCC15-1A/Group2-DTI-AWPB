@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, Eye, Trash2, PlusCircle, History, X } from "lucide-react";
 import { generateApprovedEntryPdf } from "../services/pdfService";
+import { csvExportService } from "../services/csvService";
 
 import AdminEntryReviewModal from "../components/admin/AdminEntryReviewModal";
 import AdminDeleteEntryModal from "../components/admin/AdminDeleteEntryModal";
@@ -202,6 +203,24 @@ export default function AdminReview({
       });
     }
   };
+
+  const handleExportApprovedEntriesToCSV = async () => {
+    try {
+      const result = await csvExportService.exportApprovedEntriesToCSV();
+      onShowToast?.({
+        title: "CSV export successful",
+        description: `Exported ${result.recordCount} approved entries to ${result.filename}`,
+        type: "success",
+      });
+    } catch (error) {
+      onShowToast?.({
+        title: "CSV export failed",
+        description: error.message || "Could not export approved entries to CSV.",
+        type: "error",
+      });
+    }
+  };
+  
 const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, newStatus) => {
   try {
     const { error } = await supabase.from("budget_transactions").insert({
@@ -651,7 +670,9 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
                   ))}
                 </SelectContent>
               </Select>
-
+              <Button onClick={handleExportApprovedEntriesToCSV}>
+                Export to CSV
+              </Button>
               <Button variant="outline" onClick={clearFilters} className="w-full sm:w-auto">
                 Reset
               </Button>
