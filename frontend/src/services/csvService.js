@@ -130,12 +130,39 @@ export const csvExportService = {
       'Activity No.': entry.no,
       'Sub Activity': entry.subActivity,
       'Title of Activities': entry.titleOfActivities,
-      // Monthly breakdown as JSON string for CSV compatibility
       ...entry.monthlyBreakdown,
       'Grand Total': entry.grandTotal,
     }));
   },
 
+  calculateTotalsRow(entries) {
+    const monthlyTotals = {};
+    let totalGrandTotal = 0;
+
+    entries.forEach(entry => {
+      Object.keys(entry.monthlyBreakdown).forEach(month => {
+        if (!monthlyTotals[month]) {
+          monthlyTotals[month] = 0;
+        }
+        monthlyTotals[month] += entry.monthlyBreakdown[month];
+      });
+      totalGrandTotal += entry.grandTotal;
+    });
+
+    const totalsRow = {
+      'Unit': 'TOTAL',
+      'Component': '',
+      'Sub Component': '',
+      'Key Activity': '',
+      'Activity No.': '',
+      'Sub Activity': '',
+      'Title of Activities': '',
+      ...monthlyTotals,
+      'Grand Total': totalGrandTotal,
+    };
+
+    return totalsRow;
+  },
   /**
    * Convert array of objects to CSV string
    * @param {Array} data - Array of objects to convert
@@ -214,6 +241,10 @@ export const csvExportService = {
 
       // Transform data for CSV
       const csvData = this.transformEntriesForCSV(entries);
+
+      // Calculate totals row
+      const totalsRow = this.calculateTotalsRow(entries);
+      csvData.push(totalsRow);
 
       // Convert to CSV string
       const csvContent = this.convertToCSV(csvData);
