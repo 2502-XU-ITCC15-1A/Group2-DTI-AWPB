@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 // The JSON file passed in via `templateData` is still used as a fallback
 // until the network request finishes (and as a safety net if it fails).
 import { templateService } from "../services/supabaseService";
+import { supabase } from "../lib/supabase";
 
 const FALLBACK_VALUE = "N/A";
 
@@ -216,6 +217,7 @@ export default function SubmitEntry({
   // flight. Once Supabase responds, we replace the data with the live one.
   // -------------------------------------------------------------------------
   const [supabaseTemplateData, setSupabaseTemplateData] = useState(null);
+  const [unitBudgets, setUnitBudgets] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -238,6 +240,29 @@ export default function SubmitEntry({
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // Fetch unit budget totals for reference display
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("budget_transactions")
+          .select("unit, type, amount")
+          .not("unit", "is", null);
+        if (error) throw error;
+        const budgets = {};
+        (data || []).forEach((tx) => {
+          if (!tx.unit) return;
+          if (!budgets[tx.unit]) budgets[tx.unit] = 0;
+          if (tx.type === "ADDED") budgets[tx.unit] += Number(tx.amount);
+          else if (tx.type === "DEDUCTED") budgets[tx.unit] -= Number(tx.amount);
+        });
+        setUnitBudgets(budgets);
+      } catch (err) {
+        console.error("Failed to load unit budgets:", err);
+      }
+    })();
   }, []);
 
   // Prefer Supabase data when available; otherwise use the JSON prop.
@@ -1055,29 +1080,40 @@ export default function SubmitEntry({
                 </p>
               </div>
 
-              <div className="max-w-sm">
-                <label className="mb-2 block text-sm font-medium">
-                  Unit Cost
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="Enter unit cost"
-                  {...register("unitCost", {
-                    setValueAs: (value) => (value === "" ? "" : Number(value)),
-                    required: "Unit Cost is required",
-                    min: {
-                      value: 0,
-                      message: "Unit Cost cannot be negative",
-                    },
-                  })}
-                  className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-300"
-                />
-                {errors.unitCost && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {errors.unitCost.message}
-                  </p>
+              <div className="flex items-start gap-4">
+                <div className="max-w-sm flex-1">
+                  <label className="mb-2 block text-sm font-medium">
+                    Unit Cost
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Enter unit cost"
+                    {...register("unitCost", {
+                      setValueAs: (value) => (value === "" ? "" : Number(value)),
+                      required: "Unit Cost is required",
+                      min: {
+                        value: 0,
+                        message: "Unit Cost cannot be negative",
+                      },
+                    })}
+                    className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-300"
+                  />
+                  {errors.unitCost && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {errors.unitCost.message}
+                    </p>
+                  )}
+                </div>
+
+                {unit && (
+                  <div className="mt-6 rounded-lg bg-slate-50 border border-slate-200 px-4 py-2.5">
+                    <p className="text-xs font-medium text-slate-500">{unit} Total Budget</p>
+                    <p className="text-lg font-bold text-slate-800">
+                      {formatCurrency(unitBudgets[unit] || 0)}
+                    </p>
+                  </div>
                 )}
               </div>
 
