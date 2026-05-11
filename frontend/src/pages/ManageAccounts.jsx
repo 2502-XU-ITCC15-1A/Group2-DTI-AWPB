@@ -58,12 +58,14 @@ const EMPTY_EDIT_FORM = {
   role: "encoder",
 };
 
-function getRoleBadgeVariant(role) {
-  return role === "admin" ? "default" : "outline";
-}
-
 function getStatusBadgeVariant(status) {
   return status === "active" ? "statusApproved" : "statusRejected";
+}
+
+function getRoleBadgeClass(role) {
+  return role === "admin"
+    ? "border-transparent bg-gradient-to-r from-[#1f2f74] to-[#2a4694] text-white shadow-[0_4px_10px_rgba(31,47,116,0.22)]"
+    : "border-slate-200 bg-white text-slate-900";
 }
 
 export default function ManageAccounts({
@@ -205,7 +207,7 @@ export default function ManageAccounts({
     ) {
       nextErrors.username =
         editForm.role === "encoder"
-          ? "Encoder accounts must use the enc_ prefix."
+          ? "Account Officer accounts must use the enc_ prefix."
           : "Admin accounts must use the adm_ prefix.";
     } else if (
       accounts.some(
@@ -342,7 +344,7 @@ export default function ManageAccounts({
               >
                 <option value="all">All Roles</option>
                 <option value="admin">Admin</option>
-                <option value="encoder">Encoder</option>
+                <option value="encoder">Account Officer</option>
               </select>
 
               <select
@@ -379,14 +381,14 @@ export default function ManageAccounts({
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-[1120px] w-full table-fixed border-collapse text-sm">
+              <table className="min-w-[1050px] w-full table-fixed border-collapse text-sm">
                 <colgroup>
                   <col className="w-[17%]" />
-                  <col className="w-[22%]" />
-                  <col className="w-[23%]" />
-                  <col className="w-[11%]" />
+                  <col className="w-[24%]" />
+                  <col className="w-[27%]" />
+                  <col className="w-[14%]" />
                   <col className="w-[10%]" />
-                  <col className="w-[17%]" />
+                  <col className="w-[8%]" />
                 </colgroup>
 
                 <thead className="bg-slate-50 text-left">
@@ -400,10 +402,10 @@ export default function ManageAccounts({
                     <th className="px-4 py-2.5 font-semibold text-slate-700">
                       Email
                     </th>
-                    <th className="px-4 py-2.5 font-semibold text-slate-700">
+                    <th className="px-4 py-2.5 text-center font-semibold text-slate-700">
                       Role
                     </th>
-                    <th className="px-4 py-2.5 font-semibold text-slate-700">
+                    <th className="px-4 py-2.5 text-center font-semibold text-slate-700">
                       Status
                     </th>
                     <th className="px-4 py-2.5 text-center font-semibold text-slate-700">
@@ -416,60 +418,69 @@ export default function ManageAccounts({
                   {filteredAccounts.map((account) => (
                     <tr key={account.id} className="border-b last:border-b-0">
                       <td className="px-4 py-4 text-slate-700">
-                        {account.username}
+                        <p className="truncate" title={account.username}>
+                          {account.username}
+                        </p>
                       </td>
 
                       <td className="px-4 py-4">
-                        <p className="font-medium text-slate-900">
+                        <p className="truncate font-medium text-slate-900" title={account.fullName}>
                           {account.fullName}
                         </p>
                       </td>
 
-                      <td className="px-4 py-4 text-slate-700">{account.email}</td>
+                      <td className="px-4 py-4 text-slate-700">
+                        <p className="truncate" title={account.email}>
+                          {account.email}
+                        </p>
+                      </td>
 
-                      <td className="px-4 py-4">
-                        <Badge variant={getRoleBadgeVariant(account.role)}>
-                          {account.role === "admin" ? "Admin" : "Encoder"}
+                      <td className="px-4 py-4 text-center">
+                        <Badge variant="outline" className={getRoleBadgeClass(account.role)}>
+                          {account.role === "admin" ? "Admin" : "Account Officer"}
                         </Badge>
                       </td>
 
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-4 text-center">
                         <Badge variant={getStatusBadgeVariant(account.status)}>
                           {account.status === "active" ? "Active" : "Deactivated"}
                         </Badge>
                       </td>
 
-                      <td className="px-4 py-4">
-                        <div className="flex items-center justify-center gap-2 whitespace-nowrap">
+                      <td className="px-4 py-4 align-middle">
+                        <div className="flex items-center justify-center gap-1">
                           <Button
                             type="button"
-                            variant="outline"
+                            variant="ghost"
+                            size="icon-sm"
                             onClick={() => openEditModal(account)}
-                            className="shrink-0 border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200"
+                            title="Edit account"
+                            className="text-blue-600 hover:text-blue-700"
                           >
-                            <Pencil size={15} />
-                            Edit
+                            <Pencil />
                           </Button>
 
                           {account.status === "active" ? (
                             <Button
                               type="button"
-                              variant="outline"
+                              variant="ghost"
+                              size="icon-sm"
                               onClick={() => setDeactivateTarget(account)}
-                              className="shrink-0 border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                              title="Deactivate account"
+                              className="text-red-600 hover:text-red-700"
                             >
-                              <UserX size={15} />
-                              Deactivate
+                              <UserX />
                             </Button>
                           ) : (
                             <Button
                               type="button"
-                              variant="outline"
+                              variant="ghost"
+                              size="icon-sm"
                               onClick={() => handleActivate(account.id)}
-                              className="shrink-0 border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
+                              title="Activate account"
+                              className="text-green-600 hover:text-green-700"
                             >
-                              <RotateCcw size={15} />
-                              Activate
+                              <RotateCcw />
                             </Button>
                           )}
                         </div>

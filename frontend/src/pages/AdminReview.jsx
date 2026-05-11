@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Eye, Trash2, PlusCircle, History, X } from "lucide-react";
+import { Search, Eye, Trash2, History, X, Wallet } from "lucide-react";
 import { generateApprovedEntryPdf } from "../services/pdfService";
 import { csvExportService } from "../services/csvService";
 
@@ -42,6 +42,19 @@ function formatDate(value) {
   });
 }
 
+function formatUnitCode(unit) {
+  const normalizedUnit = String(unit || "").trim().toLowerCase();
+
+  const unitCodes = {
+    "regional coordinating unit": "RCU",
+    bukidnon: "BKD",
+    "lanao del norte": "LDN",
+    "misamis oriental": "MIS OR",
+  };
+
+  return unitCodes[normalizedUnit] || unit || "N/A";
+}
+
 function getStatusBadgeVariant(status) {
   switch (status) {
     case "Pending Review":
@@ -60,6 +73,9 @@ function getStatusBadgeVariant(status) {
 function isApprovedStatus(status) {
   return String(status || "").trim().toLowerCase() === "approved";
 }
+
+const gradientButtonClass =
+  "border-0 bg-gradient-to-r from-[#1f2f74] to-[#2a4694] text-white shadow-[0_6px_16px_rgba(31,47,116,0.28)] transition-all duration-200 hover:from-[#19265f] hover:to-[#213a80] hover:shadow-[0_10px_24px_rgba(31,47,116,0.38)]";
 
 export default function AdminReview({
   entries: entriesProp = [],
@@ -497,27 +513,23 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
         </p>
       </div>
       
-       <Card className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg">
-    <CardContent className="p-5">
-    <div className="flex items-center justify-between">
-      <div className="space-y-1">
-        <p className="text-emerald-100 text-sm font-medium">TOTAL BUDGET</p>
-        <p className="text-3xl font-bold tracking-tight">
-            ₱{totalBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-</p>
-        <p className="text-emerald-100 text-xs">Available for approvals</p>
+       <Card className="border-0 bg-gradient-to-br from-[#6ea3a6] via-[#4f8f93] to-[#2f7f86] text-white shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
+    <CardContent className="p-4 md:p-5">
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex items-start gap-3">
+        <div className="rounded-2xl bg-white/20 p-3 text-white">
+          <Wallet size={20} />
+        </div>
+
+        <div className="space-y-1">
+          <p className="text-base font-semibold text-white">Total Budget</p>
+          <p className="text-3xl font-bold tracking-tight">
+              ₱{totalBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+          <p className="text-sm text-white/85">Available for approvals</p>
+        </div>
       </div>
-      
-      <div className="flex gap-3">
-        <Button 
-          onClick={() => setShowHistoryModal(true)}
-          variant="outline" 
-          className="border-white/30 text-emerald-700 hover:bg-white/10 hover:text-white"
-        >
-          <History className="h-6 w-4 mr-2" />
-          View Records
-        </Button>
-      </div>
+
     </div>
   </CardContent>
 </Card>
@@ -918,8 +930,8 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
               </p>
             </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap xl:justify-end">
-              <div className="relative w-full sm:min-w-[300px] sm:flex-1 xl:max-w-[340px]">
+            <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[280px_125px_115px_115px_auto_auto] xl:w-auto xl:justify-start">
+              <div className="relative min-w-0">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <Input
                   value={searchTerm}
@@ -930,7 +942,7 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
               </div>
 
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-[160px]">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="All Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -943,21 +955,21 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
               </Select>
 
               <Select value={unitFilter} onValueChange={setUnitFilter}>
-                <SelectTrigger className="w-full sm:w-[140px]">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="All Units" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Units</SelectItem>
                   {availableUnits.map((unit) => (
                     <SelectItem key={unit} value={unit}>
-                      {unit}
+                      {formatUnitCode(unit)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
 
               <Select value={yearFilter} onValueChange={setYearFilter}>
-                <SelectTrigger className="w-full sm:w-[140px]">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="All Years" />
                 </SelectTrigger>
                 <SelectContent>
@@ -969,10 +981,10 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
                   ))}
                 </SelectContent>
               </Select>
-              <Button onClick={handleExportApprovedEntriesToCSV}>
+              <Button onClick={handleExportApprovedEntriesToCSV} className={`whitespace-nowrap ${gradientButtonClass}`}>
                 Export to CSV
               </Button>
-              <Button variant="outline" onClick={clearFilters} className="w-full sm:w-auto">
+              <Button onClick={clearFilters} className={`whitespace-nowrap ${gradientButtonClass}`}>
                 Reset
               </Button>
             </div>
@@ -988,13 +1000,13 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
             <div className="overflow-x-auto">
               <table className="min-w-[1050px] w-full table-fixed border-collapse text-sm">
                 <colgroup>
-                  <col className="w-[25%]" />
-                  <col className="w-[8%]" />
+                  <col className="w-[19%]" />
                   <col className="w-[10%]" />
+                  <col className="w-[9%]" />
                   <col className="w-[8%]" />
-                  <col className="w-[12%]" />
-                  <col className="w-[10%]" />
-                  <col className="w-[8%]" />
+                  <col className="w-[15%]" />
+                  <col className="w-[13%]" />
+                  <col className="w-[14%]" />
                   <col className="w-[8%]" />
                 </colgroup>
 
@@ -1020,7 +1032,9 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
                         </p>
                       </td>
                       <td className="px-4 py-4 text-slate-700">{entry.no || 'N/A'}</td>
-                      <td className="px-4 py-4 text-slate-700">{entry.unit}</td>
+                      <td className="px-4 py-4 font-medium text-slate-700" title={entry.unit}>
+                        {formatUnitCode(entry.unit)}
+                      </td>
                       <td className="px-4 py-4 text-slate-700">{entry.planningYear || "N/A"}</td>
                       <td className="px-4 py-4 text-slate-700">{formatDate(entry.submittedAt)}</td>
                       <td className="px-4 py-4">

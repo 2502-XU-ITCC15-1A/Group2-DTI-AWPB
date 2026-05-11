@@ -142,7 +142,7 @@ export default function AdminEditUserModal({
                 className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
               >
                 <option value="admin">Admin</option>
-                <option value="encoder">Encoder</option>
+                <option value="encoder">Account Officer</option>
               </select>
             </div>
 
@@ -151,7 +151,7 @@ export default function AdminEditUserModal({
                 Account Notes
               </p>
               <p className="mt-2 text-sm leading-7 text-slate-600">
-                Use `enc_` for encoder accounts and `adm_` for admin accounts.
+                Use `enc_` for Account Officer accounts and `adm_` for admin accounts.
                 Leave the password fields blank if there are no password
                 changes.
               </p>
