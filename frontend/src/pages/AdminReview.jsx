@@ -762,7 +762,7 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
 {/* Unit-specific Budget Cards */}
 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
   {UNITS.map((unit) => (
-    <Card key={unit} className="bg-gradient-to-br from-slate-700 to-slate-900 text-white shadow-md">
+    <Card key={unit} className="bg-gradient-to-br from-[#1f2f74] via-[#243b86] to-[#2a4694] text-white shadow-md">
       <CardContent className="p-4">
         <div className="space-y-3">
           <div>
