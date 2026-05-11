@@ -1,77 +1,157 @@
+markdown
+# AWPB System - DTI RAPID Growth Project
+
+An Annual Work and Budget Plan (AWPB) management system for the DTI RAPID Growth Project, built with React and Supabase.
+
+## Overview
+
+The AWPB System is a web-based application that allows encoders to submit annual work and budget plans, and administrators to review, approve, or return submissions. The system manages complex hierarchical templates, monthly budget breakdowns, and user access control.
 
 
+## Project Status
 
+| Component | Status | Completion |
+|-----------|--------|------------|
+| Frontend | 🟢 Functional | 95% |
+| Database | 🟢 Functional | 95% |
+| Backend | 🔴 Removed | 0% |
 
-# 📊 Project progress status
-
-## 🎨 Frontend — 🟢 **Most complete** (~80%)
-
-Fully built React app with these pages:
-
-| Page | Purpose |
-|---|---|
-| [Login.jsx](cci:7://file:///c:/Users/KateC/Desktop/slp-dti-awpb-system/frontend/src/pages/Login.jsx:0:0-0:0) | ✅ Working (confirmed yesterday) |
-| [ForgotPassword.jsx](cci:7://file:///c:/Users/KateC/Desktop/slp-dti-awpb-system/frontend/src/pages/ForgotPassword.jsx:0:0-0:0) | ⚠️ Exists but untested |
-| [Home.jsx](cci:7://file:///c:/Users/KateC/Desktop/slp-dti-awpb-system/frontend/src/pages/Home.jsx:0:0-0:0) | ✅ Landing/dashboard |
-| [AdminDashboard.jsx](cci:7://file:///c:/Users/KateC/Desktop/slp-dti-awpb-system/frontend/src/pages/AdminDashboard.jsx:0:0-0:0) | ✅ Admin view |
-| [AdminReview.jsx](cci:7://file:///c:/Users/KateC/Desktop/slp-dti-awpb-system/frontend/src/pages/AdminReview.jsx:0:0-0:0) | Review entries |
-| [ManageAccounts.jsx](cci:7://file:///c:/Users/KateC/Desktop/slp-dti-awpb-system/frontend/src/pages/ManageAccounts.jsx:0:0-0:0) | ⚠️ UI works, Add User is **buggy** (needs the fix we started) |
-| [AddNewAccount.jsx](cci:7://file:///c:/Users/KateC/Desktop/slp-dti-awpb-system/frontend/src/pages/AddNewAccount.jsx:0:0-0:0) | Linked to the Add User bug |
-| [ManageTemplate.jsx](cci:7://file:///c:/Users/KateC/Desktop/slp-dti-awpb-system/frontend/src/pages/ManageTemplate.jsx:0:0-0:0) | Edit components/sub-components |
-| [MyEntries.jsx](cci:7://file:///c:/Users/KateC/Desktop/slp-dti-awpb-system/frontend/src/pages/MyEntries.jsx:0:0-0:0) | Encoder's entries |
-| [SubmitEntry.jsx](cci:7://file:///c:/Users/KateC/Desktop/slp-dti-awpb-system/frontend/src/pages/SubmitEntry.jsx:0:0-0:0) | Main form (biggest file — 41KB) |
-
-**Data layer:** `@c:\Users\KateC\Desktop\slp-dti-awpb-system\frontend\src\services\supabaseService.js` — talks directly to Supabase.
+**Overall Status:** ✅ Ready for User Acceptance Testing (UAT)
 
 ---
 
-## 🗄️ Backend — 🟡 **Legacy, mostly abandoned** (~0% used)
+## Working Features
 
-- One file: `@c:\Users\KateC\Desktop\slp-dti-awpb-system\backend\src\server.js` (27KB Express API)
-- Was the **original** design (before Supabase migration)
-- **Not currently used** — the frontend talks to Supabase directly, bypassing this entirely
-- Still has a [.env](cci:7://file:///c:/Users/KateC/Desktop/slp-dti-awpb-system/backend/.env:0:0-0:0) with database URL, but nothing calls it
+### For Encoders
 
-**Status:** Dead code. Either delete it or resurrect it for admin-only operations (e.g. to fix the Add User bug properly).
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Login | ✅ | Username/password authentication |
+| Submit Entry | ✅ | Complete AWPB entry form with 3-step wizard |
+| Monthly Budget Computation | ✅ | Unit Cost × Monthly Target = Amount |
+| Monthly Breakdown Display | ✅ | Shows targets and amounts in table |
+| Grand Total Calculation | ✅ | Sum of all monthly amounts |
+| View My Entries | ✅ | List of all submitted entries |
+| Entry Status Tracking | ✅ | Shows Pending/Returned/Approved/Rejected |
+| Edit Returned Entries | ✅ | All fields pre-populate when editing |
+| Delete Pending Entries | ✅ | Can delete entries not yet reviewed |
+| View Entry Details | ✅ | Modal with complete entry information |
+
+### For Administrators
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Admin Dashboard | ✅ | Overview with statistics and budgets |
+| Review Entries | ✅ | Table with all submissions |
+| No. Column | ✅ | Shows activity number from template |
+| Sub Activity Column | ✅ | Shows sub-activity from template |
+| Monthly Breakdown in Review | ✅ | Displays targets and amounts |
+| Approve Entries | ✅ | Changes status to "Approved" |
+| Return Entries | ✅ | Changes status to "Returned" with comments |
+| Reject Entries | ✅ | Changes status to "Rejected" with comments |
+| Manage Template | ✅ | CRUD for components, sub-components, key activities |
+| Manage Accounts | ✅ | Create, edit, activate, deactivate users |
+| Submission Window Control | ✅ | Open/close encoding periods |
+| Filter Entries | ✅ | By status, unit, year |
+| Budget by Unit | ✅ | Dashboard shows approved budgets per unit |
+
+### Database
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Supabase Integration | ✅ | Cloud database with real-time |
+| Row Level Security | ✅ | Policies for encoders and admins |
+| Foreign Key Relationships | ✅ | Properly linked tables |
+| Monthly Targets | ✅ | Stored separately for each entry |
+| Template Hierarchy | ✅ | 4-level nested structure |
+| User Profiles | ✅ | Extended auth users with roles |
 
 ---
 
-## 🗃️ Database — 🟢 **Set up and working** (~85%)
+## Features Needing Fix
 
-✅ **Live on Supabase cloud** (`engimvovjhbuozskneys.supabase.co`)
+### High Priority
 
-✅ All tables created:
-- `profiles`, `entries`, `monthly_targets`, [components](cci:9://file:///c:/Users/KateC/Desktop/slp-dti-awpb-system/frontend/src/components:0:0-0:0), `sub_components`, `key_activities`, `sub_activities`, `units`, `submission_windows`
+| Issue | Description | Impact | Suggested Fix |
+|-------|-------------|--------|----------------|
+| `handle_new_user` Trigger | Trigger doesn't fire for users created via admin API | Admin-created users need manual profile creation | Modify trigger or create profiles programmatically |
+| RLS Warnings in Dashboard | Reference tables show "RLS Disabled" warnings | Cosmetic only, no functionality impact | Add SELECT-only RLS policies |
 
-✅ Seed data loaded (components, units)
+### Low Priority
 
-✅ RLS policies active
+| Issue | Description | Impact | Suggested Fix |
+|-------|-------------|--------|----------------|
+| Forgot Password | Feature exists but untested | Password reset flow not verified | Test and implement email reset |
+| Audit/History Table | No tracking of entry changes | Cannot see who changed what | Create audit trigger and table |
+| Legacy Backend Code | Express server files still in repo | Clutter, not used | Delete `backend/` folder |
+| Legacy Database Files | Old SQL files in root `database/` folder | Clutter, not used | Delete folder |
 
-⚠️ **Known issues:**
-1. `handle_new_user` trigger doesn't fire for users created via admin API (related to the Add User bug)
-2. Some legacy files ([backend/database/](cci:9://file:///c:/Users/KateC/Desktop/slp-dti-awpb-system/backend/database:0:0-0:0), root [database/](cci:9://file:///c:/Users/KateC/Desktop/slp-dti-awpb-system/database:0:0-0:0)) still in repo — unused
-3. Audit/history table not yet defined (future work)
 
----
 
-## 🎯 TL;DR
 
-```
-Frontend  ████████░░ 80%  (built, mostly working, 1 known bug)
-Backend   █░░░░░░░░░ 10%  (exists but unused — legacy)
-Database  ████████░░ 85%  (deployed, seeded, minor cleanup needed)
-```
+**Project Structure**
+text
+<img width="455" height="592" alt="image" src="https://github.com/user-attachments/assets/c86c3fae-40a7-430b-8a1c-9c8ecf91caf1" />
 
-**Architecture in use today:**
+<img width="402" height="190" alt="image" src="https://github.com/user-attachments/assets/3e6c40f7-e8f6-49f3-9cd6-d020fbbedf81" />
 
-```
-React frontend ──► Supabase (DB + Auth + RLS)
-```
 
-Backend Express server is sitting dormant. If your team decides to use it again (for admin operations like "Add User"), that's a design decision for the team — not your concern as the database person.
+    
+**User Roles**
+Encoder
 
----
+**Username prefix: enc_ (e.g., enc_jdelacruz)**
 
-## 🎯 What this means for you
+Can submit and edit own entries
 
-Your job: keep [supabase/migrations/](cci:9://file:///c:/Users/KateC/Desktop/slp-dti-awpb-system/supabase/migrations:0:0-0:0) clean, add new migration files for any schema changes, and verify the database matches what the frontend expects. You're in good shape. 👍
+Can view own submission status
+
+Can edit returned entries
+
+Admin
+**Username prefix: adm_ (e.g., adm_admin)**
+
+Can review all entries
+
+Can manage template hierarchy
+
+Can manage user accounts
+
+Can configure submission windows
+
+Can view dashboard statistics
+
+**Key Features**
+-**Submission Window Control**
+Admins can open/close encoding periods. When closed, encoders cannot submit new entries or edit returned ones.
+
+-**Monthly Budget Computation**
+Unit Cost × Monthly Target = Monthly Amount
+
+Grand Total = Sum of all monthly amounts
+
+Only months with targets > 0 are saved
+
+**Template Management**
+Admins can manage the 4-level hierarchy:
+
+- Components
+
+- Sub-components
+
+- Key Activities (with Activity No. and Performance Indicator)
+
+- Sub-activities
+
+**Entry Review Workflow**
+- Encoder submits entry → Status: "Pending Review"
+
+- Admin reviews → Can Approve, Return, or Reject
+
+- If Returned, encoder can edit and resubmit
+
+- If Approved/Rejected, entry is locked
+
+
+- ✅ Troubleshooting guide
+- ✅ Useful SQL queries

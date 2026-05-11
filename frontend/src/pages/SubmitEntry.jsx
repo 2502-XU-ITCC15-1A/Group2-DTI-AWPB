@@ -42,7 +42,7 @@ function buildTemplateDataFromSupabase(hierarchyRows, unitRows) {
       component, component_id,
       sub_component, sub_component_id,
       key_activity, key_activity_id,
-      activity_no, performance_indicator, 
+      activity_no, label, 
       sub_activity, sub_activity_id 
     } = row;
 
@@ -68,7 +68,7 @@ function buildTemplateDataFromSupabase(hierarchyRows, unitRows) {
     if (!entry) {
       entry = {
         no: activity_no,
-        performanceIndicator: performance_indicator || "",
+        performanceIndicator: label || "",
         subActivities: [],
       };
       bucket.push(entry);
@@ -480,7 +480,6 @@ export default function SubmitEntry({
       "subComponent",
       "keyActivity",
       "no",
-      "performanceIndicator",
       "subActivity",
       "titleOfActivities",
     ]);
@@ -936,16 +935,9 @@ export default function SubmitEntry({
                     placeholder="Will auto-fill after selecting No."
                     disabled={!selectedNo}
                     readOnly
-                    {...register("performanceIndicator", {
-                      required: "Performance Indicator is required",
-                    })}
+                    {...register("performanceIndicator")}
                     className="w-full rounded-lg border bg-gray-50 px-3 py-2 text-sm text-gray-700 outline-none"
                   />
-                  {errors.performanceIndicator && (
-                    <p className="mt-1 text-sm text-red-600">
-                      {errors.performanceIndicator.message}
-                    </p>
-                  )}
                 </div>
                 <div>
                   <label className="mb-2 block text-sm font-medium">
