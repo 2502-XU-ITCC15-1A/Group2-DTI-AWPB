@@ -124,7 +124,7 @@ export default function AddNewAccount({
 
         form.role === "encoder"
 
-          ? "Encoder accounts must use the enc_ prefix."
+          ? "Account Officer accounts must use the enc_ prefix."
 
           : "Admin accounts must use the adm_ prefix.";
 
@@ -284,7 +284,7 @@ export default function AddNewAccount({
 
         <p className="mt-1 text-sm text-slate-500">
 
-          Create a new encoder or admin account for the AWPB system.
+          Create a new Account Officer or admin account for the AWPB system.
 
         </p>
 
@@ -512,7 +512,7 @@ export default function AddNewAccount({
 
                   <option value="admin">Admin</option>
 
-                  <option value="encoder">Encoder</option>
+                  <option value="encoder">Account Officer</option>
 
                 </select>
 
@@ -530,7 +530,7 @@ export default function AddNewAccount({
 
                 <p className="mt-2 text-sm leading-7 text-slate-600">
 
-                  Use `enc_` for encoder accounts and `adm_` for admin
+                  Use `enc_` for Account Officer accounts and `adm_` for admin
 
                   accounts. Usernames should stay unique and role-specific to
 

@@ -35,6 +35,13 @@ const MONTHS = [
   { key: "Dec", label: "December" },
 ];
 
+const DEFAULT_UNITS = [
+  "Regional Coordinating Unit",
+  "Bukidnon",
+  "Lanao del Norte",
+  "Misamis Oriental",
+];
+
 function formatCurrency(value) {
   return new Intl.NumberFormat("en-PH", {
     style: "currency",
@@ -203,24 +210,33 @@ export default function AdminDashboard({
   }, [approvedEntries]);
 
   const unitBudget = useMemo(() => {
-    const totalsByUnit = approvedEntries.reduce((acc, entry) => {
+    const totalsByUnit = DEFAULT_UNITS.reduce((acc, unit) => {
+      acc[unit] = {
+        unit,
+        amount: 0,
+        entries: 0,
+      };
+      return acc;
+    }, {});
+
+    approvedEntries.forEach((entry) => {
       const unitKey = entry.unit || "Unassigned";
 
-      if (!acc[unitKey]) {
-        acc[unitKey] = {
+      if (!totalsByUnit[unitKey]) {
+        totalsByUnit[unitKey] = {
           unit: unitKey,
           amount: 0,
           entries: 0,
         };
       }
 
-      acc[unitKey].amount += Number(entry.grandTotal || 0);
-      acc[unitKey].entries += 1;
+      totalsByUnit[unitKey].amount += Number(entry.grandTotal || 0);
+      totalsByUnit[unitKey].entries += 1;
+    });
 
-      return acc;
-    }, {});
-
-    return Object.values(totalsByUnit).sort((a, b) => b.amount - a.amount);
+    return Object.values(totalsByUnit).sort(
+      (a, b) => b.amount - a.amount || a.unit.localeCompare(b.unit),
+    );
   }, [approvedEntries]);
 
   const pendingEntries = useMemo(() => {
@@ -228,6 +244,10 @@ export default function AdminDashboard({
       .filter((entry) => entry.status === "Pending Review")
       .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))
       .slice(0, 5);
+  }, [yearEntries]);
+
+  const pendingEntryCount = useMemo(() => {
+    return yearEntries.filter((entry) => entry.status === "Pending Review").length;
   }, [yearEntries]);
 
   const maxUnitAmount = Math.max(...unitBudget.map((item) => item.amount), 1);
@@ -297,7 +317,7 @@ export default function AdminDashboard({
                         windowOpen ? "text-white" : "text-rose-900"
                       }`}
                     >
-                      Encoding Period {windowOpen ? "Open" : "Closed"}
+                      Submission Period {windowOpen ? "Open" : "Closed"}
                     </p>
                     <Badge
                       variant="outline"
@@ -326,7 +346,7 @@ export default function AdminDashboard({
                   windowOpen ? "text-white/85" : "text-rose-800"
                 }`}
               >
-                Control when encoders can submit new entries or revise returned
+                Control when Account Officers can submit new entries or revise returned
                 submissions.
               </p>
             </div>
@@ -415,8 +435,8 @@ export default function AdminDashboard({
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-        <Card className="border-0 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
+      <div className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+        <Card className="flex h-full flex-col border-0 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
           <CardHeader>
             <CardTitle className="text-lg">Budget by Unit</CardTitle>
             <p className="text-sm text-slate-500">
@@ -425,17 +445,17 @@ export default function AdminDashboard({
             </p>
           </CardHeader>
 
-          <CardContent>
+          <CardContent className="flex flex-1 flex-col">
             {unitBudget.length === 0 ? (
               <div className="rounded-2xl border border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">
                 No approved unit budget data available for this year yet.
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="grid flex-1 auto-rows-fr gap-4">
                 {unitBudget.map((item) => (
                   <div
                     key={item.unit}
-                    className="rounded-2xl border border-slate-200/90 bg-slate-50 p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)]"
+                    className="flex flex-col justify-center rounded-2xl border border-slate-200/90 bg-slate-50 p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)]"
                   >
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                       <div>
@@ -468,7 +488,7 @@ export default function AdminDashboard({
           </CardContent>
         </Card>
 
-        <Card className="border-0 bg-gradient-to-br from-[#1f2f74] via-[#243b86] to-[#2a4694] text-white shadow-[0_14px_34px_rgba(31,47,116,0.24)]">
+        <Card className="flex h-full flex-col border-0 bg-gradient-to-br from-[#1f2f74] via-[#243b86] to-[#2a4694] text-white shadow-[0_14px_34px_rgba(31,47,116,0.24)]">
           <CardHeader className="pb-2">
             <CardTitle className="text-xl">Budget Overview</CardTitle>
             <p className="text-sm text-white/75">
@@ -476,13 +496,13 @@ export default function AdminDashboard({
             </p>
           </CardHeader>
 
-          <CardContent className="space-y-5">
+          <CardContent className="flex flex-1 flex-col space-y-5">
             <div className="rounded-2xl bg-white/12 p-4">
               <p className="text-sm text-white/75">Approved Yearly Budget</p>
               <h2 className="mt-2 text-3xl font-bold">{formatCurrency(approvedBudget)}</h2>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/8 p-4">
+            <div className="flex-1 rounded-2xl border border-white/10 bg-white/8 p-4">
               <div className="mb-4">
                 <p className="font-medium text-white">Approved Monthly Budget</p>
                 <p className="text-xs text-white/70">
@@ -550,6 +570,15 @@ export default function AdminDashboard({
                     </div>
                   </div>
                 ))}
+                {pendingEntryCount >= 5 && (
+                  <Button
+                    asChild
+                    variant="link"
+                    className="h-auto px-0 text-[#1f2f74] hover:text-[#2a4694]"
+                  >
+                    <Link to="/admin/review">See more in Admin Review</Link>
+                  </Button>
+                )}
               </div>
             )}
           </CardContent>

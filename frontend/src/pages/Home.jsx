@@ -115,13 +115,17 @@ export default function Home({ entries = [], submissionWindow }) {
   }, [entries]);
 
   const returnedEntries = useMemo(() => {
-    return entries.filter((entry) => entry.status === "Returned").slice(0, 3);
+    return entries.filter((entry) => entry.status === "Returned").slice(0, 5);
+  }, [entries]);
+
+  const returnedEntryCount = useMemo(() => {
+    return entries.filter((entry) => entry.status === "Returned").length;
   }, [entries]);
 
   const recentEntries = useMemo(() => {
     return [...entries]
       .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))
-      .slice(0, 4);
+      .slice(0, 5);
   }, [entries]);
 
   return (
@@ -239,6 +243,15 @@ export default function Home({ entries = [], submissionWindow }) {
                     </Badge>
                   </div>
                 ))}
+                {returnedEntryCount >= 5 && (
+                  <Button
+                    asChild
+                    variant="link"
+                    className="h-auto px-0 text-[#1f2f74] hover:text-[#2a4694]"
+                  >
+                    <Link to="/submit">See more in Submit Entry</Link>
+                  </Button>
+                )}
               </div>
             )}
           </CardContent>
@@ -281,6 +294,15 @@ export default function Home({ entries = [], submissionWindow }) {
                       </Badge>
                     </div>
                   ))}
+                  {entries.length >= 5 && (
+                    <Button
+                      asChild
+                      variant="link"
+                      className="h-auto px-0 text-[#1f2f74] hover:text-[#2a4694]"
+                    >
+                      <Link to="/entries">See more in My Entries</Link>
+                    </Button>
+                  )}
                 </div>
               )}
             </CardContent>

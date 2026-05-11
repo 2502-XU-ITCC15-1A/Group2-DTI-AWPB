@@ -58,12 +58,14 @@ const EMPTY_EDIT_FORM = {
   role: "encoder",
 };
 
-function getRoleBadgeVariant(role) {
-  return role === "admin" ? "default" : "outline";
-}
-
 function getStatusBadgeVariant(status) {
   return status === "active" ? "statusApproved" : "statusRejected";
+}
+
+function getRoleBadgeClass(role) {
+  return role === "admin"
+    ? "border-transparent bg-gradient-to-r from-[#1f2f74] to-[#2a4694] text-white shadow-[0_4px_10px_rgba(31,47,116,0.22)]"
+    : "border-slate-200 bg-white text-slate-900";
 }
 
 export default function ManageAccounts({
@@ -205,7 +207,7 @@ export default function ManageAccounts({
     ) {
       nextErrors.username =
         editForm.role === "encoder"
-          ? "Encoder accounts must use the enc_ prefix."
+          ? "Account Officer accounts must use the enc_ prefix."
           : "Admin accounts must use the adm_ prefix.";
     } else if (
       accounts.some(
@@ -342,7 +344,7 @@ export default function ManageAccounts({
               >
                 <option value="all">All Roles</option>
                 <option value="admin">Admin</option>
-                <option value="encoder">Encoder</option>
+                <option value="encoder">Account Officer</option>
               </select>
 
               <select
@@ -381,11 +383,11 @@ export default function ManageAccounts({
             <div className="overflow-x-auto">
               <table className="min-w-[1050px] w-full table-fixed border-collapse text-sm">
                 <colgroup>
-                  <col className="w-[18%]" />
-                  <col className="w-[25%]" />
-                  <col className="w-[28%]" />
+                  <col className="w-[17%]" />
+                  <col className="w-[24%]" />
+                  <col className="w-[27%]" />
+                  <col className="w-[14%]" />
                   <col className="w-[10%]" />
-                  <col className="w-[11%]" />
                   <col className="w-[8%]" />
                 </colgroup>
 
@@ -400,10 +402,10 @@ export default function ManageAccounts({
                     <th className="px-4 py-2.5 font-semibold text-slate-700">
                       Email
                     </th>
-                    <th className="px-4 py-2.5 font-semibold text-slate-700">
+                    <th className="px-4 py-2.5 text-center font-semibold text-slate-700">
                       Role
                     </th>
-                    <th className="px-4 py-2.5 font-semibold text-slate-700">
+                    <th className="px-4 py-2.5 text-center font-semibold text-slate-700">
                       Status
                     </th>
                     <th className="px-4 py-2.5 text-center font-semibold text-slate-700">
@@ -433,13 +435,13 @@ export default function ManageAccounts({
                         </p>
                       </td>
 
-                      <td className="px-4 py-4">
-                        <Badge variant={getRoleBadgeVariant(account.role)}>
-                          {account.role === "admin" ? "Admin" : "Encoder"}
+                      <td className="px-4 py-4 text-center">
+                        <Badge variant="outline" className={getRoleBadgeClass(account.role)}>
+                          {account.role === "admin" ? "Admin" : "Account Officer"}
                         </Badge>
                       </td>
 
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-4 text-center">
                         <Badge variant={getStatusBadgeVariant(account.status)}>
                           {account.status === "active" ? "Active" : "Deactivated"}
                         </Badge>
