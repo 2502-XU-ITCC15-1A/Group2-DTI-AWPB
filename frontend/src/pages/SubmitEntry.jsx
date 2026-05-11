@@ -15,6 +15,39 @@ import { supabase } from "../lib/supabase";
 
 const FALLBACK_VALUE = "N/A";
 
+function compareTemplateValues(a, b) {
+  return String(a ?? "").localeCompare(String(b ?? ""), undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+function compareSortOrderThenName(a, b, nameKey) {
+  const aSort = a?.sort_order;
+  const bSort = b?.sort_order;
+  if (aSort != null && bSort != null && aSort !== bSort) return aSort - bSort;
+  if (aSort != null && bSort == null) return -1;
+  if (aSort == null && bSort != null) return 1;
+  return compareTemplateValues(a?.[nameKey], b?.[nameKey]);
+}
+
+function sortTemplateKeys(keys) {
+  return [...(keys || [])].sort(compareTemplateValues);
+}
+
+function sortIndicatorItems(items) {
+  return [...(items || [])]
+    .map((item) => ({
+      ...item,
+      subActivities: sortTemplateKeys(item?.subActivities || []),
+    }))
+    .sort((a, b) => compareTemplateValues(a?.no, b?.no));
+}
+
+function hasOwnKey(node, key) {
+  return Object.prototype.hasOwnProperty.call(node || {}, key);
+}
+
 // ---------------------------------------------------------------------------
 // Reshape the flat `template_hierarchy` rows from Supabase into the nested
 // object the form already knows how to render:
@@ -38,7 +71,39 @@ function buildTemplateDataFromSupabase(hierarchyRows, unitRows) {
     subActivities: {},
   };
 
-  for (const row of hierarchyRows || []) {
+  const sortedRows = [...(hierarchyRows || [])].sort((a, b) => {
+    const componentSort = compareSortOrderThenName(
+      { ...a, sort_order: a.component_sort_order },
+      { ...b, sort_order: b.component_sort_order },
+      "component",
+    );
+    if (componentSort !== 0) return componentSort;
+    const subComponentSort = compareSortOrderThenName(
+      { ...a, sort_order: a.sub_component_sort_order },
+      { ...b, sort_order: b.sub_component_sort_order },
+      "sub_component",
+    );
+    if (subComponentSort !== 0) return subComponentSort;
+    const keyActivitySort = compareSortOrderThenName(
+      { ...a, sort_order: a.key_activity_sort_order },
+      { ...b, sort_order: b.key_activity_sort_order },
+      "key_activity",
+    );
+    if (keyActivitySort !== 0) return keyActivitySort;
+    const indicatorSort = compareSortOrderThenName(
+      { ...a, sort_order: a.performance_indicator_sort_order, activity_no: a.activity_no },
+      { ...b, sort_order: b.performance_indicator_sort_order, activity_no: b.activity_no },
+      "activity_no",
+    );
+    if (indicatorSort !== 0) return indicatorSort;
+    return compareSortOrderThenName(
+      { ...a, sort_order: a.sub_activity_sort_order },
+      { ...b, sort_order: b.sub_activity_sort_order },
+      "sub_activity",
+    );
+  });
+
+  for (const row of sortedRows) {
     const { 
       component, component_id,
       sub_component, sub_component_id,
@@ -54,7 +119,8 @@ function buildTemplateDataFromSupabase(hierarchyRows, unitRows) {
     if (key_activity) idMap.keyActivities[key_activity] = key_activity_id;
     if (sub_activity) idMap.subActivities[sub_activity] = sub_activity_id;
 
-    // Ensure nested containers exist
+    // Ensure every level that exists in Supabase has a safe container. Empty
+    // lower levels are intentional admin states and should become N/A fields.
     if (!hierarchy[component]) hierarchy[component] = {};
     if (!sub_component) continue;
     if (!hierarchy[component][sub_component]) hierarchy[component][sub_component] = {};
@@ -62,6 +128,7 @@ function buildTemplateDataFromSupabase(hierarchyRows, unitRows) {
     if (!hierarchy[component][sub_component][key_activity]) {
       hierarchy[component][sub_component][key_activity] = [];
     }
+    if (activity_no === null || activity_no === undefined || activity_no === "") continue;
 
     // Find or create the activity-number entry (grouped by `no`)
     const bucket = hierarchy[component][sub_component][key_activity];
@@ -87,6 +154,16 @@ function buildTemplateDataFromSupabase(hierarchyRows, unitRows) {
     aliases: [u.name, u.code].filter(Boolean),
   }));
   unitRows?.forEach((u) => (idMap.units[u.code || u.name] = u.id));
+
+  Object.values(hierarchy).forEach((componentNode) => {
+    Object.values(componentNode || {}).forEach((subComponentNode) => {
+      Object.keys(subComponentNode || {}).forEach((keyActivityName) => {
+        subComponentNode[keyActivityName] = sortIndicatorItems(
+          subComponentNode[keyActivityName],
+        );
+      });
+    });
+  });
 
   return { hierarchy, unitOptions, idMap };
 }
@@ -316,11 +393,11 @@ export default function SubmitEntry({
   });
 
   const unitOptions = useMemo(() => {
-    return (templateData?.unitOptions || []).map((item) => item.value);
+    return sortTemplateKeys((templateData?.unitOptions || []).map((item) => item.value));
   }, [templateData]);
 
   const componentOptions = useMemo(() => {
-    return Object.keys(templateData?.hierarchy || {});
+    return sortTemplateKeys(Object.keys(templateData?.hierarchy || {}));
   }, [templateData]);
 
   const currentComponentNode = useMemo(() => {
@@ -329,42 +406,78 @@ export default function SubmitEntry({
 
   const rawSubComponentKeys = useMemo(() => {
     if (!component) return [];
-    return Object.keys(currentComponentNode || {});
+    return sortTemplateKeys(Object.keys(currentComponentNode || {}));
   }, [component, currentComponentNode]);
 
   const hasNoSubComponent =
-    rawSubComponentKeys.length === 1 && rawSubComponentKeys[0] === "";
+    Boolean(component) &&
+    (rawSubComponentKeys.length === 0 ||
+      (rawSubComponentKeys.length === 1 && rawSubComponentKeys[0] === ""));
 
   const visibleSubComponentOptions = useMemo(() => {
-    return rawSubComponentKeys.filter((key) => key !== "");
+    return sortTemplateKeys(rawSubComponentKeys.filter((key) => key !== ""));
   }, [rawSubComponentKeys]);
 
-  const subComponentKey = subComponent === FALLBACK_VALUE ? "" : subComponent;
+  const subComponentKey = useMemo(() => {
+    if (!component || !subComponent) return "";
+
+    // "N/A" can be an actual sub-component name from Manage Template. Prefer
+    // the real hierarchy key before falling back to the legacy empty-string key.
+    if (hasOwnKey(currentComponentNode, subComponent)) return subComponent;
+    if (subComponent === FALLBACK_VALUE && hasOwnKey(currentComponentNode, "")) {
+      return "";
+    }
+    return subComponent;
+  }, [component, currentComponentNode, subComponent]);
+
+  const hasSubComponentSelection = hasNoSubComponent || Boolean(subComponentKey);
 
   const keyActivityOptions = useMemo(() => {
-    if (!component) return [];
-    return Object.keys(
+    if (!component || !hasSubComponentSelection) return [];
+    return sortTemplateKeys(Object.keys(
       templateData?.hierarchy?.[component]?.[subComponentKey] || {},
-    );
+    ));
+  }, [component, hasSubComponentSelection, subComponentKey, templateData]);
+
+  const hasNoKeyActivity =
+    Boolean(component) && hasSubComponentSelection && keyActivityOptions.length === 0;
+
+  const currentSubComponentNode = useMemo(() => {
+    return templateData?.hierarchy?.[component]?.[subComponentKey] || {};
   }, [component, subComponentKey, templateData]);
 
+  const selectedKeyActivity = useMemo(() => {
+    if (!keyActivity) return "";
+
+    // Same rule as sub components: only treat N/A as fallback when it is not a
+    // real key activity under the selected sub-component branch.
+    if (hasOwnKey(currentSubComponentNode, keyActivity)) return keyActivity;
+    return keyActivity === FALLBACK_VALUE ? "" : keyActivity;
+  }, [currentSubComponentNode, keyActivity]);
+
+  const hasKeyActivitySelection = hasNoKeyActivity || Boolean(selectedKeyActivity);
+
   const noOptions = useMemo(() => {
-    if (!component || !keyActivity) return [];
-    return (
-      templateData?.hierarchy?.[component]?.[subComponentKey]?.[keyActivity] || []
+    if (!component || !hasSubComponentSelection || !selectedKeyActivity) return [];
+    return sortIndicatorItems(
+      templateData?.hierarchy?.[component]?.[subComponentKey]?.[selectedKeyActivity] || []
     );
-  }, [component, subComponentKey, keyActivity, templateData]);
+  }, [component, hasSubComponentSelection, subComponentKey, selectedKeyActivity, templateData]);
 
   const selectedNoEntry = useMemo(() => {
     return noOptions.find((item) => String(item.no) === String(selectedNo));
   }, [noOptions, selectedNo]);
 
+  const hasNoPerformanceIndicator =
+    Boolean(component) && hasKeyActivitySelection && noOptions.length === 0;
+
   const subActivityOptions = useMemo(() => {
-    return selectedNoEntry?.subActivities || [];
+    return sortTemplateKeys(selectedNoEntry?.subActivities || []);
   }, [selectedNoEntry]);
 
   const hasNoSubActivity =
-    Boolean(selectedNo) && subActivityOptions.length === 0;
+    (hasNoPerformanceIndicator || Boolean(selectedNo)) &&
+    subActivityOptions.length === 0;
 
   const monthlyRows = useMemo(() => {
     const parsedUnitCost = toNumber(unitCost);
@@ -454,15 +567,65 @@ export default function SubmitEntry({
     resetField("no");
     resetField("performanceIndicator");
     resetField("subActivity");
-  }, [subComponent, resetField]);
+
+    if (hasNoKeyActivity) {
+      // Missing KA/PI/Sub Activity rows are valid template states. Store N/A so
+      // required validation can pass while the UI clearly shows no data exists.
+      setValue("keyActivity", FALLBACK_VALUE, {
+        shouldValidate: true,
+        shouldDirty: false,
+      });
+      setValue("no", FALLBACK_VALUE, {
+        shouldValidate: true,
+        shouldDirty: false,
+      });
+      setValue("performanceIndicator", FALLBACK_VALUE, {
+        shouldValidate: false,
+        shouldDirty: false,
+      });
+      setValue("subActivity", FALLBACK_VALUE, {
+        shouldValidate: true,
+        shouldDirty: false,
+      });
+    }
+  }, [subComponent, hasNoKeyActivity, resetField, setValue]);
 
   useEffect(() => {
     resetField("no");
     resetField("performanceIndicator");
     resetField("subActivity");
-  }, [keyActivity, resetField]);
+
+    if (hasNoPerformanceIndicator) {
+      // A key activity can exist before indicators are encoded. Treat the lower
+      // hierarchy as intentionally N/A instead of blocking Step 2.
+      setValue("no", FALLBACK_VALUE, {
+        shouldValidate: true,
+        shouldDirty: false,
+      });
+      setValue("performanceIndicator", FALLBACK_VALUE, {
+        shouldValidate: false,
+        shouldDirty: false,
+      });
+      setValue("subActivity", FALLBACK_VALUE, {
+        shouldValidate: true,
+        shouldDirty: false,
+      });
+    }
+  }, [keyActivity, hasNoPerformanceIndicator, resetField, setValue]);
 
   useEffect(() => {
+    if (hasNoPerformanceIndicator) {
+      setValue("performanceIndicator", FALLBACK_VALUE, {
+        shouldValidate: false,
+        shouldDirty: false,
+      });
+      setValue("subActivity", FALLBACK_VALUE, {
+        shouldValidate: true,
+        shouldDirty: false,
+      });
+      return;
+    }
+
     setValue(
       "performanceIndicator",
       selectedNoEntry?.performanceIndicator || "",
@@ -472,25 +635,21 @@ export default function SubmitEntry({
       },
     );
 
-    if (!selectedNo) {
+    if (!selectedNo || selectedNo === FALLBACK_VALUE) {
       resetField("subActivity");
       return;
     }
 
-    if (hasNoSubActivity) {
-      setValue("subActivity", FALLBACK_VALUE, {
-        shouldValidate: true,
-        shouldDirty: false,
-      });
-    } else if (watchedSubActivity === FALLBACK_VALUE) {
-      setValue("subActivity", "", {
-        shouldValidate: true,
-        shouldDirty: false,
-      });
-    }
+    if (hasNoSubActivity && subActivityOptions.length === 0) {
+  setValue("subActivity", FALLBACK_VALUE, {
+    shouldValidate: true,
+    shouldDirty: false,
+  });
+}
   }, [
     selectedNo,
     selectedNoEntry,
+    hasNoPerformanceIndicator,
     hasNoSubActivity,
     watchedSubActivity,
     setValue,
@@ -600,6 +759,12 @@ export default function SubmitEntry({
     
     const idMap = templateData?.idMap;
 
+    const finalSubActivity =
+  watchedSubActivity &&
+  watchedSubActivity !== FALLBACK_VALUE
+    ? watchedSubActivity
+    : selectedNoEntry?.subActivities?.[0] || FALLBACK_VALUE;
+
     if (isEditingReturnedEntry) {
       const updatedEntry = {
         ...entryToEdit,
@@ -608,7 +773,7 @@ export default function SubmitEntry({
         componentId: idMap?.components?.[data.component],
         subComponentId: idMap?.subComponents?.[data.subComponent],
         keyActivityId: idMap?.keyActivities?.[data.keyActivity],
-        subActivityId: idMap?.subActivities?.[data.subActivity],
+        subActivityId: idMap?.subActivities?.[finalSubActivity],
         ownerUsername: entryToEdit.ownerUsername || currentUser?.username || "",
         ownerFullName:
           entryToEdit.ownerFullName || currentUser?.fullName || "",
@@ -619,7 +784,7 @@ export default function SubmitEntry({
         keyActivity: data.keyActivity,
         no: data.no,
         performanceIndicator: data.performanceIndicator,
-        subActivity: data.subActivity,
+        subActivity: finalSubActivity,
         titleOfActivities: data.titleOfActivities,
         unitCost: toNumber(data.unitCost),
         monthlyBreakdown: monthlyRows.map((row) => ({
@@ -655,7 +820,7 @@ export default function SubmitEntry({
       componentId: idMap?.components?.[data.component],
       subComponentId: idMap?.subComponents?.[data.subComponent],
       keyActivityId: idMap?.keyActivities?.[data.keyActivity],
-      subActivityId: idMap?.subActivities?.[data.subActivity],
+      subActivityId: idMap?.subActivities?.[finalSubActivity],
       planningYear: data.planningYear,
       unit: data.unit,
       component: data.component,
@@ -663,7 +828,7 @@ export default function SubmitEntry({
       keyActivity: data.keyActivity,
       no: data.no,
       performanceIndicator: data.performanceIndicator,
-      subActivity: data.subActivity,
+      subActivity: finalSubActivity,
       titleOfActivities: data.titleOfActivities,
       unitCost: toNumber(data.unitCost),
       monthlyBreakdown: monthlyRows.map((row) => ({
@@ -869,7 +1034,7 @@ export default function SubmitEntry({
                       <input
                         type="text"
                         readOnly
-                        value={FALLBACK_VALUE}
+                        value="No data available"
                         className="w-full rounded-lg border bg-gray-50 px-3 py-2 text-sm text-gray-600 outline-none"
                       />
                     </>
@@ -903,22 +1068,39 @@ export default function SubmitEntry({
                   <label className="mb-2 block text-sm font-medium">
                     Key Activity
                   </label>
-                  <select
-                    {...register("keyActivity", {
-                      required: "Key Activity is required",
-                    })}
-                    disabled={
-                      !component || (!hasNoSubComponent && !subComponent)
-                    }
-                    className="w-full rounded-lg border px-3 py-2 text-sm outline-none disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-gray-300"
-                  >
-                    <option value="">Select key activity</option>
-                    {keyActivityOptions.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
+                  {hasNoKeyActivity ? (
+                    <>
+                      <input
+                        type="hidden"
+                        {...register("keyActivity", {
+                          required: "Key Activity is required",
+                        })}
+                      />
+                      <input
+                        type="text"
+                        readOnly
+                        value="No data available"
+                        className="w-full rounded-lg border bg-gray-50 px-3 py-2 text-sm text-gray-600 outline-none"
+                      />
+                    </>
+                  ) : (
+                    <select
+                      {...register("keyActivity", {
+                        required: "Key Activity is required",
+                      })}
+                      disabled={
+                        !component || (!hasNoSubComponent && !subComponent)
+                      }
+                      className="w-full rounded-lg border px-3 py-2 text-sm outline-none disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-gray-300"
+                    >
+                      <option value="">Select key activity</option>
+                      {keyActivityOptions.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </select>
+                  )}
 
                   {errors.keyActivity && (
                     <p className="mt-1 text-sm text-red-600">
@@ -928,20 +1110,37 @@ export default function SubmitEntry({
                 </div>
                 <div>
                   <label className="mb-2 block text-sm font-medium">No.</label>
-                  <select
-                    {...register("no", {
-                      required: "No. is required",
-                    })}
-                    disabled={!keyActivity}
-                    className="w-full rounded-lg border px-3 py-2 text-sm outline-none disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-gray-300"
-                  >
-                    <option value="">Select no.</option>
-                    {noOptions.map((item) => (
-                      <option key={item.no} value={String(item.no)}>
-                        {item.no} - {item.performanceIndicator}
-                      </option>
-                    ))}
-                  </select>
+                  {hasNoPerformanceIndicator ? (
+                    <>
+                      <input
+                        type="hidden"
+                        {...register("no", {
+                          required: "No. is required",
+                        })}
+                      />
+                      <input
+                        type="text"
+                        readOnly
+                        value="No data available"
+                        className="w-full rounded-lg border bg-gray-50 px-3 py-2 text-sm text-gray-600 outline-none"
+                      />
+                    </>
+                  ) : (
+                    <select
+                      {...register("no", {
+                        required: "No. is required",
+                      })}
+                      disabled={!selectedKeyActivity}
+                      className="w-full rounded-lg border px-3 py-2 text-sm outline-none disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-gray-300"
+                    >
+                      <option value="">Select no.</option>
+                      {noOptions.map((item) => (
+                        <option key={item.no} value={String(item.no)}>
+                          {item.no} - {item.performanceIndicator}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   {errors.no && (
                     <p className="mt-1 text-sm text-red-600">
                       {errors.no.message}
@@ -958,7 +1157,7 @@ export default function SubmitEntry({
                   <input
                     type="text"
                     placeholder="Will auto-fill after selecting No."
-                    disabled={!selectedNo}
+                    disabled={!selectedNo && !hasNoPerformanceIndicator}
                     readOnly
                     {...register("performanceIndicator")}
                     className="w-full rounded-lg border bg-gray-50 px-3 py-2 text-sm text-gray-700 outline-none"
@@ -980,7 +1179,7 @@ export default function SubmitEntry({
                       <input
                         type="text"
                         readOnly
-                        value={FALLBACK_VALUE}
+                        value="No data available"
                         className="w-full rounded-lg border bg-gray-50 px-3 py-2 text-sm text-gray-600 outline-none"
                       />
                     </>
