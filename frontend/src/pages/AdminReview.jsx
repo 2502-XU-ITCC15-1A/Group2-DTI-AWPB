@@ -42,6 +42,19 @@ function formatDate(value) {
   });
 }
 
+function formatUnitCode(unit) {
+  const normalizedUnit = String(unit || "").trim().toLowerCase();
+
+  const unitCodes = {
+    "regional coordinating unit": "RCU",
+    bukidnon: "BKD",
+    "lanao del norte": "LDN",
+    "misamis oriental": "MIS OR",
+  };
+
+  return unitCodes[normalizedUnit] || unit || "N/A";
+}
+
 function getStatusBadgeVariant(status) {
   switch (status) {
     case "Pending Review":
@@ -677,13 +690,13 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
             <div className="overflow-x-auto">
               <table className="min-w-[1050px] w-full table-fixed border-collapse text-sm">
                 <colgroup>
-                  <col className="w-[25%]" />
-                  <col className="w-[8%]" />
+                  <col className="w-[19%]" />
                   <col className="w-[10%]" />
+                  <col className="w-[9%]" />
                   <col className="w-[8%]" />
-                  <col className="w-[12%]" />
-                  <col className="w-[10%]" />
-                  <col className="w-[8%]" />
+                  <col className="w-[15%]" />
+                  <col className="w-[13%]" />
+                  <col className="w-[14%]" />
                   <col className="w-[8%]" />
                 </colgroup>
 
@@ -709,7 +722,9 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
                         </p>
                       </td>
                       <td className="px-4 py-4 text-slate-700">{entry.no || 'N/A'}</td>
-                      <td className="px-4 py-4 text-slate-700">{entry.unit}</td>
+                      <td className="px-4 py-4 font-medium text-slate-700" title={entry.unit}>
+                        {formatUnitCode(entry.unit)}
+                      </td>
                       <td className="px-4 py-4 text-slate-700">{entry.planningYear || "N/A"}</td>
                       <td className="px-4 py-4 text-slate-700">{formatDate(entry.submittedAt)}</td>
                       <td className="px-4 py-4">
