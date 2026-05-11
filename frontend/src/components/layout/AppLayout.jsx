@@ -63,8 +63,8 @@ export default function AppLayout({
   };
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-b from-[#0b4f52] to-[#08393b] text-white">
-      <aside className="flex w-[290px] flex-col px-7 py-8">
+    <div className="flex min-h-screen w-screen overflow-x-hidden flex-col xl:flex-row bg-gradient-to-b from-[#0b4f52] to-[#08393b] text-white">
+      <aside className="flex w-full xl:w-[290px] flex-col px-7 py-8">
         <div>
           <div className="mb-10 px-1">
             <div className="rounded-2xl border border-slate-300 bg-[#edf4f3] p-3 shadow-sm">
@@ -199,7 +199,7 @@ export default function AppLayout({
         </div>
       </aside>
 
-      <main className="flex-1 p-4 md:p-5">
+      <main className="flex-1 min-w-0 p-4 md:p-5">
         <div className="h-[calc(100vh-2rem)] overflow-y-auto rounded-[2rem] bg-[#edf4f3] px-6 py-6 text-slate-900 md:px-8 md:py-8">
           <Toast toast={toast} onDismiss={onDismissToast} />
           {children}
