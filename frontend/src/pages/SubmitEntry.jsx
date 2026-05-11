@@ -615,17 +615,12 @@ export default function SubmitEntry({
       return;
     }
 
-    if (hasNoSubActivity) {
-      setValue("subActivity", FALLBACK_VALUE, {
-        shouldValidate: true,
-        shouldDirty: false,
-      });
-    } else if (watchedSubActivity === FALLBACK_VALUE) {
-      setValue("subActivity", "", {
-        shouldValidate: true,
-        shouldDirty: false,
-      });
-    }
+    if (hasNoSubActivity && subActivityOptions.length === 0) {
+  setValue("subActivity", FALLBACK_VALUE, {
+    shouldValidate: true,
+    shouldDirty: false,
+  });
+}
   }, [
     selectedNo,
     selectedNoEntry,
@@ -739,6 +734,12 @@ export default function SubmitEntry({
     
     const idMap = templateData?.idMap;
 
+    const finalSubActivity =
+  watchedSubActivity &&
+  watchedSubActivity !== FALLBACK_VALUE
+    ? watchedSubActivity
+    : selectedNoEntry?.subActivities?.[0] || FALLBACK_VALUE;
+
     if (isEditingReturnedEntry) {
       const updatedEntry = {
         ...entryToEdit,
@@ -747,7 +748,7 @@ export default function SubmitEntry({
         componentId: idMap?.components?.[data.component],
         subComponentId: idMap?.subComponents?.[data.subComponent],
         keyActivityId: idMap?.keyActivities?.[data.keyActivity],
-        subActivityId: idMap?.subActivities?.[data.subActivity],
+        subActivityId: idMap?.subActivities?.[finalSubActivity],
         ownerUsername: entryToEdit.ownerUsername || currentUser?.username || "",
         ownerFullName:
           entryToEdit.ownerFullName || currentUser?.fullName || "",
@@ -758,7 +759,7 @@ export default function SubmitEntry({
         keyActivity: data.keyActivity,
         no: data.no,
         performanceIndicator: data.performanceIndicator,
-        subActivity: data.subActivity,
+        subActivity: finalSubActivity,
         titleOfActivities: data.titleOfActivities,
         unitCost: toNumber(data.unitCost),
         monthlyBreakdown: monthlyRows.map((row) => ({
@@ -794,7 +795,7 @@ export default function SubmitEntry({
       componentId: idMap?.components?.[data.component],
       subComponentId: idMap?.subComponents?.[data.subComponent],
       keyActivityId: idMap?.keyActivities?.[data.keyActivity],
-      subActivityId: idMap?.subActivities?.[data.subActivity],
+      subActivityId: idMap?.subActivities?.[finalSubActivity],
       planningYear: data.planningYear,
       unit: data.unit,
       component: data.component,
@@ -802,7 +803,7 @@ export default function SubmitEntry({
       keyActivity: data.keyActivity,
       no: data.no,
       performanceIndicator: data.performanceIndicator,
-      subActivity: data.subActivity,
+      subActivity: finalSubActivity,
       titleOfActivities: data.titleOfActivities,
       unitCost: toNumber(data.unitCost),
       monthlyBreakdown: monthlyRows.map((row) => ({
