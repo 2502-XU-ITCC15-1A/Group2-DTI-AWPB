@@ -37,6 +37,7 @@ function App() {
   const [submitEntryDraft, setSubmitEntryDraft] = useState(null);
   const [accounts, setAccounts] = useState(INITIAL_ACCOUNTS);
   const [templateData, setTemplateData] = useState({ hierarchy: {} });
+  const [dataLoading, setDataLoading] = useState(false);
 
   const [submissionWindow, setSubmissionWindow] = useState({
     startDate: "2026-04-01",
@@ -150,7 +151,8 @@ async function loadTemplate() {
 
   useEffect(() => {
     let cancelled = false;
-    const loadData = async () => {
+
+    const loadSubmissionWindow = async () => {
       try {
         const windowData = await submissionService.getActiveWindow();
         if (!cancelled) {
@@ -162,36 +164,72 @@ async function loadTemplate() {
             is_active: windowData.is_active,
           });
         }
-        const profiles = await usersService.getAll();
-        if (!cancelled) {
-          const formattedAccounts = profiles.map((profile) => ({
+      } catch (error) {
+        console.error("Failed to load submission window:", error);
+      }
+    };
+
+    loadSubmissionWindow();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (authLoading || !authUser || isRecoveryMode) return;
+
+    let cancelled = false;
+
+    const loadAuthenticatedData = async () => {
+      setDataLoading(true);
+      try {
+        const entriesPromise = entriesService.getAll();
+        const accountsPromise =
+          authUser.role === "admin" ? usersService.getAll() : Promise.resolve([]);
+
+        const [entriesData, profiles] = await Promise.all([
+          entriesPromise,
+          accountsPromise,
+        ]);
+
+        if (cancelled) return;
+
+        setEntries(entriesData);
+        setAccounts(
+          profiles.map((profile) => ({
             id: profile.id,
             username: profile.username,
             fullName: profile.full_name,
             email: profile.email,
             role: profile.role,
             status: profile.status,
-          }));
-          setAccounts(formattedAccounts);
-        }
-        const entriesData = await entriesService.getAll();
-        if (!cancelled) {
-          setEntries(entriesData);
-        }
+          })),
+        );
       } catch (error) {
-        console.error("Failed to load data from Supabase:", error);
-        showToast({
-          title: "Data load error",
-          description: error.message || "Could not load data. Please refresh.",
-          type: "error",
-        });
+        console.error("Failed to load authenticated data from Supabase:", error);
+        if (!cancelled) {
+          showToast({
+            title: "Data load error",
+            description: error.message || "Could not load data. Please refresh.",
+            type: "error",
+          });
+        }
+      } finally {
+        if (!cancelled) setDataLoading(false);
       }
     };
-    loadData();
-    return () => { cancelled = true; };
-  }, []);
+
+    loadAuthenticatedData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, authUser, isRecoveryMode]);
 
   useEffect(() => {
+    if (!authUser) return;
+
     const subscription = realtimeService.subscribeToEntries((payload) => {
       const { eventType, new: newRecord, old: oldRecord } = payload;
       if (eventType === "INSERT") {
@@ -203,7 +241,7 @@ async function loadTemplate() {
       }
     });
     return () => subscription.unsubscribe();
-  }, []);
+  }, [authUser]);
 
   const isAuthenticated = Boolean(authUser);
   const currentRole = authUser?.role || null;
@@ -353,15 +391,6 @@ async function loadTemplate() {
 
   const handleLogin = (user) => {
     setAuthUser(user);
-    const reloadData = async () => {
-      try {
-        const entriesData = await entriesService.getAll();
-        setEntries(entriesData);
-      } catch (error) {
-        console.error("Failed to reload entries after login:", error);
-      }
-    };
-    reloadData();
   };
 
   const handleLogout = async () => {
@@ -431,6 +460,18 @@ async function loadTemplate() {
         <Route path="/confirm-password" element={<ConfirmPassword />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
+    );
+  }
+
+  if (
+    dataLoading &&
+    entries.length === 0 &&
+    (currentRole !== "admin" || accounts.length === 0)
+  ) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-slate-500">Loading your workspace...</p>
+      </div>
     );
   }
 

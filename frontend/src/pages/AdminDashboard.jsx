@@ -271,106 +271,17 @@ export default function AdminDashboard({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-        <Card className="border-0 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
-          <CardHeader>
-            <CardTitle className="text-lg">Submission Period Settings</CardTitle>
-            <p className="text-sm text-slate-500">
-              Control when encoders can submit or revise entries.
-            </p>
-          </CardHeader>
-
-          <CardContent className="space-y-4">
-            <div
-              className={`rounded-2xl p-4 ${
-                windowOpen ? "bg-emerald-50 text-emerald-900" : "bg-rose-50 text-rose-900"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <div
-                    className={`rounded-2xl p-3 ${
-                      windowOpen
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-rose-100 text-rose-700"
-                    }`}
-                  >
-                    <CalendarRange size={18} />
-                  </div>
-
-                  <div>
-                    <p className="text-sm font-semibold">
-                      Current status: {windowOpen ? "Open for submission" : "Closed"}
-                    </p>
-                    <p className="mt-1 text-xs opacity-80">
-                      {formatDateOnly(submissionWindow?.startDate)} to{" "}
-                      {formatDateOnly(submissionWindow?.endDate)}
-                    </p>
-                  </div>
-                </div>
-
-                <Badge
-                  variant="outline"
-                  className={
-                    windowOpen
-                      ? "border-emerald-200 bg-white/70 text-emerald-700"
-                      : "border-rose-200 bg-white/70 text-rose-700"
-                  }
-                >
-                  {windowOpen ? "Open" : "Closed"}
-                </Badge>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Start Date
-                </label>
-                <input
-                  type="date"
-                  value={submissionWindow?.startDate || ""}
-                  onChange={(e) =>
-                    onUpdateSubmissionWindow((prev) => ({
-                      ...prev,
-                      startDate: e.target.value,
-                    }))
-                  }
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  End Date
-                </label>
-                <input
-                  type="date"
-                  value={submissionWindow?.endDate || ""}
-                  onChange={(e) =>
-                    onUpdateSubmissionWindow((prev) => ({
-                      ...prev,
-                      endDate: e.target.value,
-                    }))
-                  }
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
-                />
-              </div>
-            </div>
-
-          </CardContent>
-        </Card>
-
-        <Card
-          className={`border-0 shadow-[0_12px_28px_rgba(15,23,42,0.12)] ${
-            windowOpen
-              ? "bg-gradient-to-br from-[#6ea3a6] via-[#4f8f93] to-[#2f7f86]"
-              : "bg-gradient-to-br from-[#f9d1d1] via-[#f5bcbc] to-[#ef9f9f]"
-          }`}
-        >
-          <CardContent className="p-4 md:p-5">
-            <div className="flex h-full flex-col justify-between gap-4">
-              <div className="flex items-start gap-3">
+      <Card
+        className={`border-0 shadow-[0_12px_28px_rgba(15,23,42,0.12)] ${
+          windowOpen
+            ? "bg-gradient-to-br from-[#6ea3a6] via-[#4f8f93] to-[#2f7f86]"
+            : "bg-gradient-to-br from-[#f9d1d1] via-[#f5bcbc] to-[#ef9f9f]"
+        }`}
+      >
+        <CardContent className="p-4 md:p-5">
+          <div className="grid gap-5 xl:grid-cols-[1fr_520px] xl:items-center">
+            <div className="flex h-full flex-col justify-between gap-8">
+              <div className="flex items-start gap-4">
                 <div
                   className={`rounded-2xl p-3 ${
                     windowOpen ? "bg-white/20 text-white" : "bg-white/50 text-rose-900"
@@ -380,15 +291,27 @@ export default function AdminDashboard({
                 </div>
 
                 <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p
+                      className={`text-xl font-semibold ${
+                        windowOpen ? "text-white" : "text-rose-900"
+                      }`}
+                    >
+                      Encoding Period {windowOpen ? "Open" : "Closed"}
+                    </p>
+                    <Badge
+                      variant="outline"
+                      className={
+                        windowOpen
+                          ? "border-white/30 bg-white/20 text-white"
+                          : "border-rose-200 bg-white/50 text-rose-800"
+                      }
+                    >
+                      {windowOpen ? "Open" : "Closed"}
+                    </Badge>
+                  </div>
                   <p
-                    className={`text-base font-semibold ${
-                      windowOpen ? "text-white" : "text-rose-900"
-                    }`}
-                  >
-                    Encoding Period {windowOpen ? "Open" : "Closed"}
-                  </p>
-                  <p
-                    className={`text-sm ${
+                    className={`mt-1 text-base ${
                       windowOpen ? "text-white/90" : "text-rose-800"
                     }`}
                   >
@@ -399,17 +322,70 @@ export default function AdminDashboard({
               </div>
 
               <p
-                className={`text-sm ${
+                className={`max-w-2xl text-sm ${
                   windowOpen ? "text-white/85" : "text-rose-800"
                 }`}
               >
-                Admins can update the submission window at any time using the
-                settings panel.
+                Control when encoders can submit new entries or revise returned
+                submissions.
               </p>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+
+            <div
+              className={`rounded-2xl p-4 shadow-[0_16px_36px_rgba(15,23,42,0.16),inset_0_1px_0_rgba(255,255,255,0.22)] backdrop-blur-md ${
+                windowOpen
+                  ? "bg-white/18 text-white ring-1 ring-white/25"
+                  : "bg-white/52 text-rose-900 ring-1 ring-white/50"
+              }`}
+            >
+              <p className="text-sm font-semibold">Submission Period Settings</p>
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-medium">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={submissionWindow?.startDate || ""}
+                    onChange={(e) =>
+                      onUpdateSubmissionWindow((prev) => ({
+                        ...prev,
+                        startDate: e.target.value,
+                      }))
+                    }
+                    className={`w-full rounded-xl px-3 py-2.5 text-sm outline-none transition focus:ring-2 ${
+                      windowOpen
+                        ? "border border-white/30 bg-white/90 text-slate-900 focus:ring-white/35"
+                        : "border border-white/60 bg-white/85 text-slate-900 focus:ring-rose-200"
+                    }`}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    value={submissionWindow?.endDate || ""}
+                    onChange={(e) =>
+                      onUpdateSubmissionWindow((prev) => ({
+                        ...prev,
+                        endDate: e.target.value,
+                      }))
+                    }
+                    className={`w-full rounded-xl px-3 py-2.5 text-sm outline-none transition focus:ring-2 ${
+                      windowOpen
+                        ? "border border-white/30 bg-white/90 text-slate-900 focus:ring-white/35"
+                        : "border border-white/60 bg-white/85 text-slate-900 focus:ring-rose-200"
+                    }`}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard

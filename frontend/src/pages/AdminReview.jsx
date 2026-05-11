@@ -623,7 +623,7 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
               </p>
             </div>
 
-            <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(240px,1fr)_150px_140px_130px_auto_auto] xl:max-w-[1120px] xl:justify-end">
+            <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[280px_125px_115px_115px_auto_auto] xl:w-auto xl:justify-start">
               <div className="relative min-w-0">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <Input
@@ -655,7 +655,7 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
                   <SelectItem value="all">All Units</SelectItem>
                   {availableUnits.map((unit) => (
                     <SelectItem key={unit} value={unit}>
-                      {unit}
+                      {formatUnitCode(unit)}
                     </SelectItem>
                   ))}
                 </SelectContent>
