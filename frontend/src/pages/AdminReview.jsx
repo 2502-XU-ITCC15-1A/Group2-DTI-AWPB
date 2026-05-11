@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Eye, Trash2, History, X, Wallet } from "lucide-react";
+import { Search, Eye, Trash2, History, X, Wallet, PlusCircle } from "lucide-react";
 import { generateApprovedEntryPdf } from "../services/pdfService";
 import { csvExportService } from "../services/csvService";
 
@@ -530,6 +530,14 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
         </div>
       </div>
 
+      <Button
+        onClick={() => setShowHistoryModal(true)}
+        variant="outline"
+        className="w-fit border-white/35 bg-white/10 text-white shadow-sm hover:bg-white/20 hover:text-white"
+      >
+        <History className="h-4 w-4 mr-2" />
+        View Records
+      </Button>
     </div>
   </CardContent>
 </Card>
