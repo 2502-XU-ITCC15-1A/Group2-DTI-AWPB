@@ -26,6 +26,10 @@ const iconMap = {
   template: SlidersHorizontal,
 };
 
+function getRoleLabel(role) {
+  return role === "admin" ? "Admin" : "Account Officer";
+}
+
 export default function AppLayout({
   children,
   navItems = [],
@@ -74,7 +78,7 @@ export default function AppLayout({
 
           <div className="mb-6">
             <p className="text-3xl font-bold uppercase tracking-wide">
-              {currentRole === "admin" ? "Admin" : "Encoder"}
+              {currentRole === "admin" ? "Admin" : "Account Officer"}
             </p>
             <div className="mt-4 h-px bg-white/20" />
           </div>
@@ -178,7 +182,7 @@ export default function AppLayout({
                   {currentUser?.fullName || currentUser?.username || "User"}
                 </p>
                 <p className="text-xs text-white/70 capitalize">
-                  {currentUser?.role || "encoder"}
+                  {getRoleLabel(currentUser?.role)}
                 </p>
               </div>
             </div>

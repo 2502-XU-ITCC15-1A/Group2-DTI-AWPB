@@ -94,7 +94,7 @@ export default function AdminEntryReviewModal({
           <div>
             <h2 className="text-xl font-bold">Review Submission</h2>
             <p className="text-sm text-gray-500">
-              Review the encoder&apos;s submitted AWPB entry.
+              Review the Account Officer&apos;s submitted AWPB entry.
             </p>
           </div>
 
