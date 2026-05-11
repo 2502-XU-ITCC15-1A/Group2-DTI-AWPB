@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Eye, Trash2, PlusCircle, History, X } from "lucide-react";
+import { Search, Eye, Trash2, History, X, Wallet } from "lucide-react";
 import { generateApprovedEntryPdf } from "../services/pdfService";
 import { csvExportService } from "../services/csvService";
 
@@ -423,35 +423,23 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
         </p>
       </div>
       
-       <Card className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg">
-    <CardContent className="p-5">
-    <div className="flex items-center justify-between">
-      <div className="space-y-1">
-        <p className="text-emerald-100 text-sm font-medium">TOTAL BUDGET</p>
-        <p className="text-3xl font-bold tracking-tight">
-            ₱{totalBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-</p>
-        <p className="text-emerald-100 text-xs">Available for approvals</p>
+       <Card className="border-0 bg-gradient-to-br from-[#6ea3a6] via-[#4f8f93] to-[#2f7f86] text-white shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
+    <CardContent className="p-4 md:p-5">
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex items-start gap-3">
+        <div className="rounded-2xl bg-white/20 p-3 text-white">
+          <Wallet size={20} />
+        </div>
+
+        <div className="space-y-1">
+          <p className="text-base font-semibold text-white">Total Budget</p>
+          <p className="text-3xl font-bold tracking-tight">
+              ₱{totalBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+          <p className="text-sm text-white/85">Available for approvals</p>
+        </div>
       </div>
-      
-      <div className="flex gap-3">
-        <Button 
-          onClick={() => setShowBudgetModal(true)}
-          className="bg-white text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 shadow-md"
-        >
-          <PlusCircle className="h-4 w-4 mr-2" />
-          Add Budget
-        </Button>
-        
-        <Button 
-          onClick={() => setShowHistoryModal(true)}
-          variant="outline" 
-          className="border-white/30 text-emerald-700 hover:bg-white/10 hover:text-white"
-        >
-          <History className="h-6 w-4 mr-2" />
-          View Records
-        </Button>
-      </div>
+
     </div>
   </CardContent>
 </Card>
