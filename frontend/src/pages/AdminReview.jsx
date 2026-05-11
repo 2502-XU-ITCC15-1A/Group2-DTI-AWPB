@@ -5,6 +5,7 @@ import { csvExportService } from "../services/csvService";
 
 import AdminEntryReviewModal from "../components/admin/AdminEntryReviewModal";
 import AdminDeleteEntryModal from "../components/admin/AdminDeleteEntryModal";
+import AdminBudgetRecordsModal from "../components/admin/AdminBudgetRecordsModal";
 
 import { supabase } from "../lib/supabase";
 import { entriesService } from "../services/supabaseService";
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { UNIT_CODES, normalizeUnitCode } from "@/lib/units";
 
 function formatCurrency(value) {
   return new Intl.NumberFormat("en-PH", {
@@ -39,20 +41,24 @@ function formatDate(value) {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    hour12: true,
+  });
+}
+
+function formatRecordDateTime(value) {
+  if (!value) return "N/A";
+  return new Date(value).toLocaleString("en-PH", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
   });
 }
 
 function formatUnitCode(unit) {
-  const normalizedUnit = String(unit || "").trim().toLowerCase();
-
-  const unitCodes = {
-    "regional coordinating unit": "RCU",
-    bukidnon: "BKD",
-    "lanao del norte": "LDN",
-    "misamis oriental": "MIS OR",
-  };
-
-  return unitCodes[normalizedUnit] || unit || "N/A";
+  return normalizeUnitCode(unit);
 }
 
 function getStatusBadgeVariant(status) {
@@ -97,14 +103,13 @@ export default function AdminReview({
   const [budgetDesc, setBudgetDesc] = useState("");
 
   // Unit-specific budget state
-  const UNITS = ["MOR", "LDN", "BKD", "RCU"];
+  const UNITS = UNIT_CODES;
   const [unitBudgets, setUnitBudgets] = useState({});
   const [unitTransactions, setUnitTransactions] = useState({});
   const [activeUnitBudgetModal, setActiveUnitBudgetModal] = useState(null);
   const [activeUnitHistoryModal, setActiveUnitHistoryModal] = useState(null);
   const [unitBudgetAmount, setUnitBudgetAmount] = useState("");
   const [unitBudgetDesc, setUnitBudgetDesc] = useState("");
-  const [historyTab, setHistoryTab] = useState("movements");
 
   const entries = entriesProp;
 
@@ -113,7 +118,7 @@ export default function AdminReview({
   }, [entries]);
 
   const availableUnits = useMemo(() => {
-    return [...new Set(entries.map((entry) => entry.unit).filter(Boolean))].sort();
+    return [...new Set(entries.map((entry) => normalizeUnitCode(entry.unit)).filter(Boolean))].sort();
   }, [entries]);
 
   const availableYears = useMemo(() => {
@@ -130,12 +135,12 @@ export default function AdminReview({
         entry.titleOfActivities?.toLowerCase().includes(normalizedSearch) ||
         entry.performanceIndicator?.toLowerCase().includes(normalizedSearch) ||
         entry.subActivity?.toLowerCase().includes(normalizedSearch) ||
-        entry.unit?.toLowerCase().includes(normalizedSearch);
+        normalizeUnitCode(entry.unit).toLowerCase().includes(normalizedSearch);
 
       const matchesStatus =
         statusFilter === "all" || entry.status === statusFilter;
 
-      const matchesUnit = unitFilter === "all" || entry.unit === unitFilter;
+      const matchesUnit = unitFilter === "all" || normalizeUnitCode(entry.unit) === unitFilter;
 
       const matchesYear =
         yearFilter === "all" || String(entry.planningYear) === yearFilter;
@@ -170,7 +175,7 @@ export default function AdminReview({
   if (!selectedEntry) return;
   const entryAmount = selectedEntry.grandTotal || 0;
   const entryTitle = selectedEntry.titleOfActivities;
-  const entryUnit = selectedEntry.unit;
+  const entryUnit = normalizeUnitCode(selectedEntry.unit);
 
   const unitBudget = unitBudgets[entryUnit] || 0;
   if (entryAmount > unitBudget) {
@@ -260,7 +265,7 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
       amount: amount,
       type: 'ADDED',
       description: `REVERSAL: "${entryTitle}" changed from ${oldStatus} → ${newStatus}`,
-      unit: entryUnit || null,
+      unit: normalizeUnitCode(entryUnit) || null,
     });
     
     if (error) throw error;
@@ -390,14 +395,18 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
       if (txError) throw txError;
 
         // All unit transactions for the general View Records
-        const allUnitTx = (txData || []).filter((tx) => tx.unit);
+        const allUnitTx = (txData || [])
+          .filter((tx) => tx.unit)
+          .map((tx) => ({ ...tx, unit: normalizeUnitCode(tx.unit) }));
         setTransactions(allUnitTx);
 
     // Per-unit budget calculation
     const budgets = {};
     const txByUnit = {};
     UNITS.forEach((unit) => {
-      const unitTx = (txData || []).filter((tx) => tx.unit === unit);
+      const unitTx = (txData || [])
+        .filter((tx) => normalizeUnitCode(tx.unit) === unit)
+        .map((tx) => ({ ...tx, unit: normalizeUnitCode(tx.unit) }));
       txByUnit[unit] = unitTx;
       let unitTotal = 0;
       unitTx.forEach((tx) => {
@@ -475,7 +484,7 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
         amount: amount,
         type: 'ADDED',
         description: unitBudgetDesc || `Budget addition for ${unit}`,
-        unit: unit,
+        unit: normalizeUnitCode(unit),
       });
 
       if (error) throw error;
@@ -602,161 +611,13 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
   </div>
 )}
 
-{/* History Modal */}
 {showHistoryModal && (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-    <div className="bg-white rounded-xl shadow-2xl w-[850px] max-h-[650px] flex flex-col">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-4 rounded-t-xl flex justify-between items-center">
-        <div>
-          <h3 className="text-xl font-semibold text-white">Budget Records</h3>
-          <p className="text-emerald-100 text-sm mt-1">Track all budget movements and approved deductions</p>
-        </div>
-        <button 
-          onClick={() => { setShowHistoryModal(false); setHistoryTab("movements"); }}
-          className="text-white hover:bg-white/20 rounded-lg p-1 transition"
-        >
-          <X className="h-5 w-5" />
-        </button>
-      </div>
-
-      {/* Tabs + Balance */}
-      <div className="px-6 pt-4 pb-2 border-b flex items-center justify-between">
-        <div className="flex gap-2">
-          <button
-            onClick={() => setHistoryTab("movements")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              historyTab === "movements"
-                ? "bg-emerald-100 text-emerald-700"
-                : "text-slate-500 hover:bg-slate-100"
-            }`}
-          >
-            Budget Movements
-          </button>
-          <button
-            onClick={() => setHistoryTab("deductions")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              historyTab === "deductions"
-                ? "bg-emerald-100 text-emerald-700"
-                : "text-slate-500 hover:bg-slate-100"
-            }`}
-          >
-            Approved Entries
-          </button>
-        </div>
-        <Badge className="bg-emerald-100 text-emerald-700 border-0 text-base px-4 py-2">
-          Total: ₱{totalBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-        </Badge>
-      </div>
-      
-      {/* Tab Content */}
-      <div className="overflow-y-auto flex-1">
-        {historyTab === "movements" && (
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 sticky top-0">
-            <tr className="border-b">
-              <th className="px-6 py-3 text-left font-semibold text-slate-700">Date & Time</th>
-              <th className="px-6 py-3 text-left font-semibold text-slate-700">Unit</th>
-              <th className="px-6 py-3 text-left font-semibold text-slate-700">Type</th>
-              <th className="px-6 py-3 text-left font-semibold text-slate-700">Amount</th>
-              <th className="px-6 py-3 text-left font-semibold text-slate-700">Description</th>
-            </tr>
-          </thead>
-          <tbody>
-           {transactions.length === 0 ? (
-    <tr>
-      <td colSpan="5" className="text-center py-12 text-slate-400">
-        <History className="h-12 w-12 mx-auto mb-3 opacity-50" />
-        <p>No transactions yet</p>
-        <p className="text-sm">Add budget to units to get started</p>
-      </td>
-    </tr>
-  ) : (
-    transactions.map((tx) => (
-      <tr key={tx.id} className="border-b hover:bg-slate-50">
-        <td className="px-6 py-3 text-slate-600">
-          {new Date(tx.created_at).toLocaleString()}
-        </td>
-        <td className="px-6 py-3">
-          <Badge className="bg-slate-100 text-slate-700">
-            {tx.unit || '—'}
-          </Badge>
-        </td>
-        <td className="px-6 py-3">
-          <Badge className={tx.type === 'ADDED' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
-            {tx.type}
-          </Badge>
-        </td>
-        <td className={`px-6 py-3 font-semibold ${tx.type === 'ADDED' ? 'text-green-600' : 'text-red-600'}`}>
-          {tx.type === 'ADDED' ? '+' : '-'}₱{Number(tx.amount).toLocaleString()}
-        </td>
-        <td className="px-6 py-3 text-slate-600">{tx.description}</td>
-      </tr>
-    ))
-  )}
-          </tbody>
-        </table>
-        )}
-
-        {historyTab === "deductions" && (
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 sticky top-0">
-            <tr className="border-b">
-              <th className="px-5 py-3 text-left font-semibold text-slate-700">Title</th>
-              <th className="px-5 py-3 text-left font-semibold text-slate-700">No.</th>
-              <th className="px-5 py-3 text-left font-semibold text-slate-700">Unit</th>
-              <th className="px-5 py-3 text-left font-semibold text-slate-700">Year</th>
-              <th className="px-5 py-3 text-left font-semibold text-slate-700">Date Submitted</th>
-              <th className="px-5 py-3 text-left font-semibold text-slate-700">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-           {approvedEntries.length === 0 ? (
-    <tr>
-      <td colSpan="6" className="text-center py-12 text-slate-400">
-        <History className="h-12 w-12 mx-auto mb-3 opacity-50" />
-        <p>No approved entries yet</p>
-      </td>
-    </tr>
-  ) : (
-    approvedEntries.map((entry) => (
-      <tr key={entry.id} className="border-b hover:bg-slate-50">
-        <td className="px-5 py-3 text-slate-800 font-medium max-w-[200px] truncate">
-          {entry.titleOfActivities || '—'}
-        </td>
-        <td className="px-5 py-3 text-slate-600">{entry.no || '—'}</td>
-        <td className="px-5 py-3">
-          <Badge className="bg-slate-100 text-slate-700">
-            {entry.unit || '—'}
-          </Badge>
-        </td>
-        <td className="px-5 py-3 text-slate-600">{entry.planningYear || '—'}</td>
-        <td className="px-5 py-3 text-slate-600">
-          {entry.submittedAt ? new Date(entry.submittedAt).toLocaleDateString() : '—'}
-        </td>
-        <td className="px-5 py-3 font-semibold text-red-600">
-          ₱{Number(entry.grandTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-        </td>
-      </tr>
-    ))
-  )}
-          </tbody>
-        </table>
-        )}
-      </div>
-      
-      {/* Footer */}
-      <div className="border-t p-4 bg-slate-50 rounded-b-xl">
-        <Button 
-          onClick={() => { setShowHistoryModal(false); setHistoryTab("movements"); }} 
-          variant="outline" 
-          className="w-full"
-        >
-          Close
-        </Button>
-      </div>
-    </div>
-  </div>
+  <AdminBudgetRecordsModal
+    approvedEntries={approvedEntries}
+    onClose={() => setShowHistoryModal(false)}
+    totalBudget={totalBudget}
+    transactions={transactions}
+  />
 )}
 
 {/* Unit-specific Budget Cards */}
@@ -895,7 +756,7 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
               (unitTransactions[activeUnitHistoryModal] || []).map((tx) => (
                 <tr key={tx.id} className="border-b hover:bg-slate-50">
                   <td className="px-6 py-3 text-slate-600">
-                    {new Date(tx.created_at).toLocaleString()}
+                    {formatRecordDateTime(tx.created_at)}
                   </td>
                   <td className="px-6 py-3">
                     <Badge className={tx.type === 'ADDED' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
