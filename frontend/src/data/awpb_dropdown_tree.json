@@ -1,32 +1,28 @@
 {
-  "note": "Extracted from uploaded workbook 'Copy of RCU 10 - Template - AWPB 2027 - with BED.xlsx'. Columns A-F hierarchy is identical across RCU, BKD, LDN, and MIS OR sheets. Title of Activities (G) differs by unit and entry.",
+  "note": "Extracted from uploaded workbook 'Copy of RCU 10 - Template - AWPB 2027 - with BED.xlsx'. Columns A-F hierarchy is identical across RCU, BKD, LDN, and MOR sheets. Title of Activities (G) differs by unit and entry.",
   "unitOptions": [
     {
-      "value": "Regional Coordinating Unit",
+      "value": "RCU",
       "aliases": [
-        "RCU"
+        "Regional Coordinating Unit"
       ]
     },
     {
-      "value": "Bukidnon",
+      "value": "BKD",
       "aliases": [
-        "BKD",
-        "BKD",
         "Bukidnon"
       ]
     },
     {
-      "value": "Lanao del Norte",
+      "value": "LDN",
       "aliases": [
-        "LDN",
         "Lanao del Norte"
       ]
     },
     {
-      "value": "Misamis Oriental",
+      "value": "MOR",
       "aliases": [
         "MIS OR",
-        "MOR",
         "Misamis Oriental"
       ]
     }

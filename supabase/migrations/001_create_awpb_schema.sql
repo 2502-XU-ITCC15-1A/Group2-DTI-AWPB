@@ -161,7 +161,7 @@ INSERT INTO units (code, name, aliases) VALUES
 ('RCU', 'Regional Coordinating Unit', '["RCU"]'),
 ('BKD', 'Bukidnon', '["BKD"]'),
 ('LDN', 'Lanao del Norte', '["LDN"]'),
-('MIS OR', 'Misamis Oriental', '["MIS OR"]');
+('MOR', 'Misamis Oriental', '["MIS OR", "MOR"]');
 
 -- Components (from frontend data)
 INSERT INTO components (name, code, sort_order) VALUES

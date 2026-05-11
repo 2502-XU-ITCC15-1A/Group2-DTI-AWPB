@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { getUnitLookupValues, normalizeUnitCode } from '../lib/units';
 
 // Authentication services
 export const authService = {
@@ -175,7 +176,7 @@ export const entriesService = {
       ownerUsername: row.profiles?.username || '',
       ownerFullName: row.profiles?.full_name || '',
       planningYear: row.planning_year,
-      unit: row.units?.name || '',
+      unit: normalizeUnitCode(row.units?.code || row.units?.name || ''),
       component: row.components?.name || '',
       subComponent: row.sub_components?.name || '',
       keyActivity: row.key_activities?.name || '',
@@ -209,7 +210,7 @@ export const entriesService = {
       .select(`
         *,
         profiles!owner_id (username, full_name),
-        units (name),
+        units (name, code),
         components (name),
         sub_components (name),
         key_activities (name, activity_no, performance_indicator),
@@ -259,7 +260,7 @@ export const entriesService = {
       .select(`
         *,
         profiles!owner_id (username, full_name),
-        units (name),
+        units (name, code),
         components (name),
         sub_components (name),
         key_activities (name, activity_no, performance_indicator),
@@ -293,10 +294,11 @@ export const entriesService = {
     console.log("Entry data received:", entryData);
     
     const findUnitId = async (identifier) => {
+      const lookupValues = getUnitLookupValues(identifier);
       const { data, error } = await supabase
         .from('units')
         .select('id')
-        .or(`code.eq.${identifier},name.eq.${identifier}`)
+        .or(lookupValues.flatMap((value) => [`code.eq.${value}`, `name.eq.${value}`]).join(','))
         .maybeSingle();
       if (error) console.error('Unit lookup error:', error);
       return data?.id;

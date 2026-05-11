@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { normalizeUnitCode } from '../lib/units';
 
 // Utility functions for data formatting (reuse from existing components)
 
@@ -30,7 +31,7 @@ export const csvExportService = {
         .select(`
           *,
           profiles!owner_id (username, full_name),
-          units (name),
+          units (name, code),
           components (name),
           sub_components (name),
           key_activities (name, activity_no, performance_indicator),
@@ -73,7 +74,7 @@ export const csvExportService = {
           const grandTotal = monthlyBreakdown.reduce((sum, m) => sum + (m.amount || 0), 0);
 
           return {
-            unit: row.units?.name || '', 
+            unit: normalizeUnitCode(row.units?.code || row.units?.name || ''), 
             component: row.components?.name || '',
             subComponent: row.sub_components?.name || '', 
             keyActivity: row.key_activities?.name || '', 

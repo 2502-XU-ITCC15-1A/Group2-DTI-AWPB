@@ -12,6 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { UNIT_CODES, normalizeUnitCode } from "@/lib/units";
 import {
   Select,
   SelectContent,
@@ -35,12 +36,7 @@ const MONTHS = [
   { key: "Dec", label: "December" },
 ];
 
-const DEFAULT_UNITS = [
-  "Regional Coordinating Unit",
-  "Bukidnon",
-  "Lanao del Norte",
-  "Misamis Oriental",
-];
+const DEFAULT_UNITS = UNIT_CODES;
 
 function formatCurrency(value) {
   return new Intl.NumberFormat("en-PH", {
@@ -220,7 +216,7 @@ export default function AdminDashboard({
     }, {});
 
     approvedEntries.forEach((entry) => {
-      const unitKey = entry.unit || "Unassigned";
+      const unitKey = normalizeUnitCode(entry.unit);
 
       if (!totalsByUnit[unitKey]) {
         totalsByUnit[unitKey] = {

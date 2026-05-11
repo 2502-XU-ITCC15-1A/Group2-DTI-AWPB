@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 // until the network request finishes (and as a safety net if it fails).
 import { templateService } from "../services/supabaseService";
 import { supabase } from "../lib/supabase";
+import { normalizeUnitCode } from "../lib/units";
 
 const FALLBACK_VALUE = "N/A";
 
@@ -150,10 +151,14 @@ function buildTemplateDataFromSupabase(hierarchyRows, unitRows) {
 
   const unitOptions = (unitRows || []).map((u) => ({
     id: u.id,
-    value: u.code || u.name,
+    value: normalizeUnitCode(u.code || u.name),
     aliases: [u.name, u.code].filter(Boolean),
   }));
-  unitRows?.forEach((u) => (idMap.units[u.code || u.name] = u.id));
+  unitRows?.forEach((u) => {
+    idMap.units[normalizeUnitCode(u.code || u.name)] = u.id;
+    idMap.units[u.code || u.name] = u.id;
+    if (u.name) idMap.units[u.name] = u.id;
+  });
 
   Object.values(hierarchy).forEach((componentNode) => {
     Object.values(componentNode || {}).forEach((subComponentNode) => {
@@ -331,9 +336,10 @@ export default function SubmitEntry({
         const budgets = {};
         (data || []).forEach((tx) => {
           if (!tx.unit) return;
-          if (!budgets[tx.unit]) budgets[tx.unit] = 0;
-          if (tx.type === "ADDED") budgets[tx.unit] += Number(tx.amount);
-          else if (tx.type === "DEDUCTED") budgets[tx.unit] -= Number(tx.amount);
+          const unitCode = normalizeUnitCode(tx.unit);
+          if (!budgets[unitCode]) budgets[unitCode] = 0;
+          if (tx.type === "ADDED") budgets[unitCode] += Number(tx.amount);
+          else if (tx.type === "DEDUCTED") budgets[unitCode] -= Number(tx.amount);
         });
         setUnitBudgets(budgets);
       } catch (err) {
@@ -393,7 +399,7 @@ export default function SubmitEntry({
   });
 
   const unitOptions = useMemo(() => {
-    return sortTemplateKeys((templateData?.unitOptions || []).map((item) => item.value));
+    return sortTemplateKeys([...new Set((templateData?.unitOptions || []).map((item) => item.value))]);
   }, [templateData]);
 
   const componentOptions = useMemo(() => {
