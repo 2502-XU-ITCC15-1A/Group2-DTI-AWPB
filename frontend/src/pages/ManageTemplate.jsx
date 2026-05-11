@@ -3,6 +3,15 @@ import { ChevronDown, Pencil, Plus, Trash2, X } from "lucide-react";
 import AdminDeleteTemplateItemModal from "@/components/admin/AdminDeleteTemplateItemModal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabase";
 import { templateMgmtService } from "@/services/supabaseService";
@@ -30,6 +39,8 @@ const inputClass =
   "h-11 rounded-xl border-slate-200 bg-slate-50 px-4 text-sm shadow-none focus-visible:ring-slate-200";
 const primaryButtonClass =
   "h-11 rounded-xl border-0 bg-gradient-to-r from-[#1f2f74] to-[#2a4694] px-4 text-white shadow-[0_8px_20px_rgba(31,47,116,0.18)] hover:from-[#19265f] hover:to-[#213a80]";
+const compactGradientButtonClass =
+  "h-9 rounded-lg border-0 bg-gradient-to-r from-[#1f2f74] to-[#2a4694] px-3 text-sm text-white shadow-[0_6px_16px_rgba(31,47,116,0.18)] hover:from-[#19265f] hover:to-[#213a80]";
 const secondaryButtonClass =
   "h-11 rounded-xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50";
 const dangerButtonClass =
@@ -147,6 +158,7 @@ export default function ManageTemplate({
   const [showAddSubActivityInput, setShowAddSubActivityInput] = useState(false);
   const [editingSubActivityIndex, setEditingSubActivityIndex] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
 
   const [newComponentName, setNewComponentName] = useState("");
   const [newSubComponentName, setNewSubComponentName] = useState("");
@@ -799,6 +811,16 @@ export default function ManageTemplate({
   // For component delete modal trigger (kept original name)
   const setComponentDeleteTarget = (name) => setDeleteTarget({ kind: "component", label: name });
 
+  const handleResetTemplate = () => {
+    onResetTemplate?.();
+    setResetDialogOpen(false);
+    onShowToast?.({
+      title: "Template reset",
+      description: "The template was restored to its default frontend state.",
+      type: "success",
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -813,16 +835,8 @@ export default function ManageTemplate({
 
         <div className="flex flex-wrap gap-2">
           <Button
-            variant="outline"
-            className={secondaryButtonClass}
-            onClick={() => {
-              onResetTemplate?.();
-              onShowToast?.({
-                title: "Template reset",
-                description: "The template was restored to its default frontend state.",
-                type: "success",
-              });
-            }}
+            className={compactGradientButtonClass}
+            onClick={() => setResetDialogOpen(true)}
           >
             Reset to Default
           </Button>
@@ -1732,6 +1746,28 @@ export default function ManageTemplate({
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reset template to default?</DialogTitle>
+            <DialogDescription>
+              This will restore the template to the default frontend state and
+              replace your current template changes in this view.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button type="button" onClick={handleResetTemplate} className={primaryButtonClass}>
+              Reset to Default
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

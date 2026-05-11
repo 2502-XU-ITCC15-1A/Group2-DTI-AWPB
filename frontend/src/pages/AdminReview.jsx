@@ -74,6 +74,9 @@ function isApprovedStatus(status) {
   return String(status || "").trim().toLowerCase() === "approved";
 }
 
+const gradientButtonClass =
+  "border-0 bg-gradient-to-r from-[#1f2f74] to-[#2a4694] text-white shadow-[0_6px_16px_rgba(31,47,116,0.28)] transition-all duration-200 hover:from-[#19265f] hover:to-[#213a80] hover:shadow-[0_10px_24px_rgba(31,47,116,0.38)]";
+
 export default function AdminReview({
   entries: entriesProp = [],
   onUpdateEntry,
@@ -620,8 +623,8 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
               </p>
             </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap xl:justify-end">
-              <div className="relative w-full sm:min-w-[300px] sm:flex-1 xl:max-w-[340px]">
+            <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(240px,1fr)_150px_140px_130px_auto_auto] xl:max-w-[1120px] xl:justify-end">
+              <div className="relative min-w-0">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <Input
                   value={searchTerm}
@@ -632,7 +635,7 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
               </div>
 
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-[160px]">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="All Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -645,7 +648,7 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
               </Select>
 
               <Select value={unitFilter} onValueChange={setUnitFilter}>
-                <SelectTrigger className="w-full sm:w-[140px]">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="All Units" />
                 </SelectTrigger>
                 <SelectContent>
@@ -659,7 +662,7 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
               </Select>
 
               <Select value={yearFilter} onValueChange={setYearFilter}>
-                <SelectTrigger className="w-full sm:w-[140px]">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="All Years" />
                 </SelectTrigger>
                 <SelectContent>
@@ -671,10 +674,10 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
                   ))}
                 </SelectContent>
               </Select>
-              <Button onClick={handleExportApprovedEntriesToCSV}>
+              <Button onClick={handleExportApprovedEntriesToCSV} className={`whitespace-nowrap ${gradientButtonClass}`}>
                 Export to CSV
               </Button>
-              <Button variant="outline" onClick={clearFilters} className="w-full sm:w-auto">
+              <Button onClick={clearFilters} className={`whitespace-nowrap ${gradientButtonClass}`}>
                 Reset
               </Button>
             </div>

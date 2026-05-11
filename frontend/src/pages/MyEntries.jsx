@@ -76,6 +76,9 @@ function isApprovedStatus(status) {
   return String(status || "").trim().toLowerCase() === "approved";
 }
 
+const gradientButtonClass =
+  "border-0 bg-gradient-to-r from-[#1f2f74] to-[#2a4694] text-white shadow-[0_6px_16px_rgba(31,47,116,0.28)] transition-all duration-200 hover:from-[#19265f] hover:to-[#213a80] hover:shadow-[0_10px_24px_rgba(31,47,116,0.38)]";
+
 export default function MyEntries({
   entries = [],
   onEditEntry,
@@ -276,7 +279,7 @@ export default function MyEntries({
                 </SelectContent>
               </Select>
 
-              <Button variant="outline" onClick={clearFilters}>
+              <Button onClick={clearFilters} className={gradientButtonClass}>
                 Reset
               </Button>
             </div>

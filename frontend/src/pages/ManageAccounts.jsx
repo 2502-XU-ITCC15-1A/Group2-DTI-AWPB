@@ -379,14 +379,14 @@ export default function ManageAccounts({
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-[1120px] w-full table-fixed border-collapse text-sm">
+              <table className="min-w-[1050px] w-full table-fixed border-collapse text-sm">
                 <colgroup>
-                  <col className="w-[17%]" />
-                  <col className="w-[22%]" />
-                  <col className="w-[23%]" />
-                  <col className="w-[11%]" />
+                  <col className="w-[18%]" />
+                  <col className="w-[25%]" />
+                  <col className="w-[28%]" />
                   <col className="w-[10%]" />
-                  <col className="w-[17%]" />
+                  <col className="w-[11%]" />
+                  <col className="w-[8%]" />
                 </colgroup>
 
                 <thead className="bg-slate-50 text-left">
@@ -416,16 +416,22 @@ export default function ManageAccounts({
                   {filteredAccounts.map((account) => (
                     <tr key={account.id} className="border-b last:border-b-0">
                       <td className="px-4 py-4 text-slate-700">
-                        {account.username}
+                        <p className="truncate" title={account.username}>
+                          {account.username}
+                        </p>
                       </td>
 
                       <td className="px-4 py-4">
-                        <p className="font-medium text-slate-900">
+                        <p className="truncate font-medium text-slate-900" title={account.fullName}>
                           {account.fullName}
                         </p>
                       </td>
 
-                      <td className="px-4 py-4 text-slate-700">{account.email}</td>
+                      <td className="px-4 py-4 text-slate-700">
+                        <p className="truncate" title={account.email}>
+                          {account.email}
+                        </p>
+                      </td>
 
                       <td className="px-4 py-4">
                         <Badge variant={getRoleBadgeVariant(account.role)}>
@@ -439,37 +445,40 @@ export default function ManageAccounts({
                         </Badge>
                       </td>
 
-                      <td className="px-4 py-4">
-                        <div className="flex items-center justify-center gap-2 whitespace-nowrap">
+                      <td className="px-4 py-4 align-middle">
+                        <div className="flex items-center justify-center gap-1">
                           <Button
                             type="button"
-                            variant="outline"
+                            variant="ghost"
+                            size="icon-sm"
                             onClick={() => openEditModal(account)}
-                            className="shrink-0 border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200"
+                            title="Edit account"
+                            className="text-blue-600 hover:text-blue-700"
                           >
-                            <Pencil size={15} />
-                            Edit
+                            <Pencil />
                           </Button>
 
                           {account.status === "active" ? (
                             <Button
                               type="button"
-                              variant="outline"
+                              variant="ghost"
+                              size="icon-sm"
                               onClick={() => setDeactivateTarget(account)}
-                              className="shrink-0 border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                              title="Deactivate account"
+                              className="text-red-600 hover:text-red-700"
                             >
-                              <UserX size={15} />
-                              Deactivate
+                              <UserX />
                             </Button>
                           ) : (
                             <Button
                               type="button"
-                              variant="outline"
+                              variant="ghost"
+                              size="icon-sm"
                               onClick={() => handleActivate(account.id)}
-                              className="shrink-0 border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
+                              title="Activate account"
+                              className="text-green-600 hover:text-green-700"
                             >
-                              <RotateCcw size={15} />
-                              Activate
+                              <RotateCcw />
                             </Button>
                           )}
                         </div>
