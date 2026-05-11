@@ -687,11 +687,10 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-[1200px] w-full table-fixed border-collapse text-sm">
+              <table className="min-w-[1050px] w-full table-fixed border-collapse text-sm">
                 <colgroup>
-                  <col className="w-[18%]" />
+                  <col className="w-[25%]" />
                   <col className="w-[8%]" />
-                  <col className="w-[15%]" />
                   <col className="w-[10%]" />
                   <col className="w-[8%]" />
                   <col className="w-[12%]" />
@@ -704,7 +703,6 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
                   <tr className="border-b">
                     <th className="px-4 py-2.5 font-semibold text-slate-700">Title</th>
                     <th className="px-4 py-2.5 font-semibold text-slate-700">No.</th>
-                    <th className="px-4 py-2.5 font-semibold text-slate-700">Sub Activity</th>
                     <th className="px-4 py-2.5 font-semibold text-slate-700">Unit</th>
                     <th className="px-4 py-2.5 font-semibold text-slate-700">Year</th>
                     <th className="px-4 py-2.5 font-semibold text-slate-700">Submitted</th>
@@ -723,7 +721,6 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
                         </p>
                       </td>
                       <td className="px-4 py-4 text-slate-700">{entry.no || 'N/A'}</td>
-                      <td className="px-4 py-4 text-slate-700">{entry.subActivity || 'N/A'}</td>
                       <td className="px-4 py-4 text-slate-700">{entry.unit}</td>
                       <td className="px-4 py-4 text-slate-700">{entry.planningYear || "N/A"}</td>
                       <td className="px-4 py-4 text-slate-700">{formatDate(entry.submittedAt)}</td>

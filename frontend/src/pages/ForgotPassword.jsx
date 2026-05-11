@@ -104,10 +104,7 @@ export default function ForgotPassword() {
               placeholder="encoder@dti.gov.ph"
               className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:ring-2 focus:ring-slate-300"
             />
-            <p className="mt-2 text-xs text-slate-500">
-              This prototype uses username plus email so accounts with the same
-              email can still be identified correctly.
-            </p>
+            
           </div>
 
           {error && (

@@ -103,9 +103,7 @@ export default function Login({ onLogin, accounts = [] }) {
                             placeholder="enc_user or adm_admin"
                             className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:ring-2 focus:ring-slate-300"
                         />
-                        <p className="mt-2 text-xs text-slate-500">
-                            Frontend prototype login only allows usernames that exist in the current account list.
-                        </p>
+                        
                     </div>
 
                     <div>
