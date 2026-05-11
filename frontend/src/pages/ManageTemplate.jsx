@@ -13,7 +13,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { supabase } from "@/lib/supabase";
 import { templateMgmtService } from "@/services/supabaseService";
 
 function cloneTemplateData(templateData) {
@@ -31,6 +30,27 @@ function normalizeIndicatorNo(value) {
   return Number.isNaN(numeric) ? trimmed : numeric;
 }
 
+function compareTemplateValues(a, b) {
+  return String(a ?? "").localeCompare(String(b ?? ""), undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+function sortTemplateKeys(keys) {
+  return [...(keys || [])].sort(compareTemplateValues);
+}
+
+function sortIndicators(items) {
+  return [...(items || [])]
+    .map((item) => ({
+      ...item,
+      // Keep the child dropdown deterministic even when Supabase returns no rows.
+      subActivities: sortTemplateKeys(item?.subActivities || []),
+    }))
+    .sort((a, b) => compareTemplateValues(a?.no, b?.no));
+}
+
 const panelClass =
   "min-w-0 rounded-[1.75rem] border border-slate-200/80 bg-white shadow-[0_14px_34px_rgba(15,23,42,0.07)]";
 const emptyStateClass =
@@ -43,8 +63,6 @@ const compactGradientButtonClass =
   "h-9 rounded-lg border-0 bg-gradient-to-r from-[#1f2f74] to-[#2a4694] px-3 text-sm text-white shadow-[0_6px_16px_rgba(31,47,116,0.18)] hover:from-[#19265f] hover:to-[#213a80]";
 const secondaryButtonClass =
   "h-11 rounded-xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50";
-const dangerButtonClass =
-  "h-11 rounded-xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100";
 const dropdownTriggerClass =
   "flex h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 text-left text-sm text-slate-700 transition hover:border-slate-300 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400";
 const actionIconButtonClass = "rounded-lg p-2 transition";
@@ -54,14 +72,6 @@ const saveInlineButtonClass =
   "rounded-lg bg-emerald-50 px-2.5 py-2 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100";
 const addPickerButtonClass =
   "flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-sky-200 bg-sky-50/60 px-4 py-2.5 text-sm text-sky-700 transition hover:border-sky-300 hover:bg-sky-50";
-
-function getSelectableClass(selected) {
-  return `w-full rounded-[1.15rem] border px-4 py-3 text-left text-sm transition ${
-    selected
-      ? "border-[#1f2f74]/25 bg-[#eef2ff] text-slate-900 shadow-[0_6px_18px_rgba(31,47,116,0.08)]"
-      : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
-  }`;
-}
 
 function getLockedPanelClass(enabled) {
   return enabled
@@ -87,42 +97,9 @@ function getTemplateLabel(value, emptyLabel) {
   return normalizeName(value) || emptyLabel;
 }
 
-// ----------------------------------------------------------------------
-// Helper functions to get Supabase IDs (used for updates & deletes)
-// ----------------------------------------------------------------------
-const getComponentIdByName = async (name) => {
-  const { data, error } = await supabase
-    .from('components')
-    .select('id')
-    .eq('name', name)
-    .limit(1);
-  if (error || !data || data.length === 0) throw new Error(`Component not found: ${name}`);
-  return data[0].id;
-};
-
-const getSubComponentIdByName = async (subCompName, componentName) => {
-  const compId = await getComponentIdByName(componentName);
-  const { data, error } = await supabase
-    .from('sub_components')
-    .select('id')
-    .eq('component_id', compId)
-    .eq('name', subCompName)
-    .limit(1);
-  if (error || !data || data.length === 0) throw new Error(`Sub-component not found: ${subCompName}`);
-  return data[0].id;
-};
-
-const getKeyActivityIdByName = async (kaName, subCompName, componentName) => {
-  const subCompId = await getSubComponentIdByName(subCompName, componentName);
-  const { data, error } = await supabase
-    .from('key_activities')
-    .select('id')
-    .eq('sub_component_id', subCompId)
-    .eq('name', kaName)
-    .limit(1);
-  if (error || !data || data.length === 0) throw new Error(`Key activity not found: ${kaName}`);
-  return data[0].id;
-};
+function logTemplateCrudError(action, error) {
+  console.error(`[ManageTemplate.${action}]`, error);
+}
 
 export default function ManageTemplate({
   templateData,
@@ -130,10 +107,10 @@ export default function ManageTemplate({
   onResetTemplate,
   onShowToast,
 }) {
-  const hierarchy = templateData?.hierarchy || {};
+  const hierarchy = useMemo(() => templateData?.hierarchy || {}, [templateData]);
 
   const componentNames = useMemo(
-    () => Object.keys(hierarchy),
+    () => sortTemplateKeys(Object.keys(hierarchy)),
     [hierarchy]
   );
 
@@ -178,14 +155,14 @@ export default function ManageTemplate({
 
   const subComponentNames = useMemo(() => {
     if (!selectedComponent) return [];
-    return Object.keys(hierarchy[selectedComponent] || {});
+    return sortTemplateKeys(Object.keys(hierarchy[selectedComponent] || {}));
   }, [hierarchy, selectedComponent]);
 
   const keyActivityNames = useMemo(() => {
     if (!selectedComponent || !subComponentNames.includes(selectedSubComponent)) return [];
-    return Object.keys(
+    return sortTemplateKeys(Object.keys(
       hierarchy[selectedComponent]?.[selectedSubComponent] || {}
-    );
+    ));
   }, [hierarchy, selectedComponent, selectedSubComponent, subComponentNames]);
 
   const indicatorItems = useMemo(() => {
@@ -196,7 +173,7 @@ export default function ManageTemplate({
     ) {
       return [];
     }
-    return (
+    return sortIndicators(
       hierarchy[selectedComponent]?.[selectedSubComponent]?.[selectedKeyActivity] ||
       []
     );
@@ -210,7 +187,10 @@ export default function ManageTemplate({
   ]);
 
   const selectedIndicator = indicatorItems[selectedIndicatorIndex] || null;
-  const subActivityItems = selectedIndicator?.subActivities || [];
+  const subActivityItems = useMemo(
+    () => selectedIndicator?.subActivities || [],
+    [selectedIndicator],
+  );
   const selectedSubActivity = subActivityItems[selectedSubActivityIndex] || "";
   const hasComponentSelected = componentNames.includes(selectedComponent);
   const hasSubComponentSelected = subComponentNames.includes(selectedSubComponent);
@@ -316,22 +296,24 @@ export default function ManageTemplate({
       return;
     }
     try {
-      await templateMgmtService.createComponent({
+      const savedComponent = await templateMgmtService.createComponent({
         name,
         code: name.toUpperCase().replace(/ /g, '_'),
         sort_order: componentNames.length + 1,
         is_active: true
       });
+      const savedName = savedComponent.name || name;
+      // Update local hierarchy only after Supabase confirms the row was saved.
       updateTemplate((nextTemplate) => {
-        nextTemplate.hierarchy[name] = {};
+        nextTemplate.hierarchy[savedName] = {};
       });
       onShowToast?.({
         title: "Component added",
-        description: `${name} is now part of the template.`,
+        description: `${savedName} is now part of the template.`,
         type: "success",
       });
       setNewComponentName("");
-      setSelectedComponent(name);
+      setSelectedComponent(savedName);
       setSelectedSubComponent("");
       setSelectedKeyActivity("");
       setSelectedIndicatorIndex(0);
@@ -340,7 +322,7 @@ export default function ManageTemplate({
       setShowAddComponentInput(false);
       setEditingComponentName("");
     } catch (err) {
-      console.error(err);
+      logTemplateCrudError("addComponent", err);
       onShowToast?.({
         title: "Error",
         description: err.message,
@@ -361,7 +343,7 @@ export default function ManageTemplate({
       return;
     }
     try {
-      const compId = await getComponentIdByName(selectedComponent);
+      const compId = await templateMgmtService.getComponentIdByName(selectedComponent);
       await templateMgmtService.updateComponent(compId, {
         name: nextName,
         code: nextName.toUpperCase().replace(/ /g, '_')
@@ -385,7 +367,7 @@ export default function ManageTemplate({
   const deleteComponent = async () => {
     if (!deleteTarget || deleteTarget.kind !== "component") return;
     try {
-      const compId = await getComponentIdByName(deleteTarget.label);
+      const compId = await templateMgmtService.getComponentIdByName(deleteTarget.label);
       await templateMgmtService.deleteComponent(compId);
       updateTemplate((nextTemplate) => {
         delete nextTemplate.hierarchy[deleteTarget.label];
@@ -415,24 +397,27 @@ export default function ManageTemplate({
       return;
     }
     try {
-      const compId = await getComponentIdByName(selectedComponent);
-      await templateMgmtService.createSubComponent({
+      const compId = await templateMgmtService.getComponentIdByName(selectedComponent);
+      const savedSubComponent = await templateMgmtService.createSubComponent({
         component_id: compId,
         name,
         code: `${selectedComponent.toUpperCase().replace(/ /g, '_')}_${name.toUpperCase().replace(/ /g, '_')}`,
         sort_order: subComponentNames.length + 1,
         is_active: true
       });
+      const savedName = savedSubComponent.name || name;
+      // Keep the UI in sync with the database row that was actually inserted.
       updateTemplate((nextTemplate) => {
-        nextTemplate.hierarchy[selectedComponent][name] = {};
+        nextTemplate.hierarchy[selectedComponent] = nextTemplate.hierarchy[selectedComponent] || {};
+        nextTemplate.hierarchy[selectedComponent][savedName] = {};
       });
       onShowToast?.({
         title: "Sub component added",
-        description: `${name} was added under ${selectedComponent}.`,
+        description: `${savedName} was added under ${selectedComponent}.`,
         type: "success",
       });
       setNewSubComponentName("");
-      setSelectedSubComponent(name);
+      setSelectedSubComponent(savedName);
       setSelectedKeyActivity("");
       setSelectedIndicatorIndex(0);
       setSelectedSubActivityIndex(0);
@@ -440,6 +425,7 @@ export default function ManageTemplate({
       setShowAddSubComponentInput(false);
       setEditingSubComponentName("");
     } catch (err) {
+      logTemplateCrudError("addSubComponent", err);
       onShowToast?.({ title: "Error", description: err.message, type: "error" });
     }
   };
@@ -456,7 +442,7 @@ export default function ManageTemplate({
       return;
     }
     try {
-      const subCompId = await getSubComponentIdByName(selectedSubComponent, selectedComponent);
+      const subCompId = await templateMgmtService.getSubComponentIdByName(selectedSubComponent, selectedComponent);
       await templateMgmtService.updateSubComponent(subCompId, { name: nextName });
       updateTemplate((nextTemplate) => {
         const compNode = nextTemplate.hierarchy[selectedComponent];
@@ -477,7 +463,7 @@ export default function ManageTemplate({
   const deleteSubComponent = async () => {
     if (!deleteTarget || deleteTarget.kind !== "subComponent" || !selectedComponent) return;
     try {
-      const subCompId = await getSubComponentIdByName(deleteTarget.label, selectedComponent);
+      const subCompId = await templateMgmtService.getSubComponentIdByName(deleteTarget.label, selectedComponent);
       await templateMgmtService.deleteSubComponent(subCompId);
       updateTemplate((nextTemplate) => {
         delete nextTemplate.hierarchy[selectedComponent][deleteTarget.label];
@@ -507,30 +493,35 @@ export default function ManageTemplate({
       return;
     }
     try {
-      const subCompId = await getSubComponentIdByName(selectedSubComponent, selectedComponent);
-      await templateMgmtService.createKeyActivity({
+      const subCompId = await templateMgmtService.getSubComponentIdByName(selectedSubComponent, selectedComponent);
+      const savedKeyActivity = await templateMgmtService.createKeyActivity({
         sub_component_id: subCompId,
         name,
         code: `KA_${name.toUpperCase().replace(/ /g, '_')}_${Date.now()}`,
         sort_order: keyActivityNames.length + 1,
         is_active: true
       });
+      const savedName = savedKeyActivity.name || name;
+      // Do not show the new key activity until the FK insert succeeds.
       updateTemplate((nextTemplate) => {
-        nextTemplate.hierarchy[selectedComponent][selectedSubComponent][name] = [];
+        nextTemplate.hierarchy[selectedComponent][selectedSubComponent] =
+          nextTemplate.hierarchy[selectedComponent][selectedSubComponent] || {};
+        nextTemplate.hierarchy[selectedComponent][selectedSubComponent][savedName] = [];
       });
       onShowToast?.({
         title: "Key activity added",
-        description: `${name} was added.`,
+        description: `${savedName} was added.`,
         type: "success",
       });
       setNewKeyActivityName("");
-      setSelectedKeyActivity(name);
+      setSelectedKeyActivity(savedName);
       setSelectedIndicatorIndex(0);
       setSelectedSubActivityIndex(0);
       setKeyActivityMenuOpen(false);
       setShowAddKeyActivityInput(false);
       setEditingKeyActivityName("");
     } catch (err) {
+      logTemplateCrudError("addKeyActivity", err);
       onShowToast?.({ title: "Error", description: err.message, type: "error" });
     }
   };
@@ -547,7 +538,7 @@ export default function ManageTemplate({
       return;
     }
     try {
-      const kaId = await getKeyActivityIdByName(selectedKeyActivity, selectedSubComponent, selectedComponent);
+      const kaId = await templateMgmtService.getKeyActivityIdByName(selectedKeyActivity, selectedSubComponent, selectedComponent);
       await templateMgmtService.updateKeyActivity(kaId, { name: nextName });
       updateTemplate((nextTemplate) => {
         const subNode = nextTemplate.hierarchy[selectedComponent][selectedSubComponent];
@@ -568,7 +559,7 @@ export default function ManageTemplate({
   const deleteKeyActivity = async () => {
     if (!deleteTarget || deleteTarget.kind !== "keyActivity" || !selectedComponent || !selectedSubComponent) return;
     try {
-      const kaId = await getKeyActivityIdByName(deleteTarget.label, selectedSubComponent, selectedComponent);
+      const kaId = await templateMgmtService.getKeyActivityIdByName(deleteTarget.label, selectedSubComponent, selectedComponent);
       await templateMgmtService.deleteKeyActivity(kaId);
       updateTemplate((nextTemplate) => {
         delete nextTemplate.hierarchy[selectedComponent][selectedSubComponent][deleteTarget.label];
@@ -600,18 +591,21 @@ export default function ManageTemplate({
       return;
     }
     try {
-      const kaId = await getKeyActivityIdByName(selectedKeyActivity, selectedSubComponent, selectedComponent);
-      await templateMgmtService.createPerformanceIndicator({
+      const kaId = await templateMgmtService.getKeyActivityIdByName(selectedKeyActivity, selectedSubComponent, selectedComponent);
+      const savedIndicator = await templateMgmtService.createPerformanceIndicator({
         key_activity_id: kaId,
         activity_no: nextNo,
         label: nextText,
         sort_order: indicatorItems.length + 1,
         is_active: true,
       });
+      const savedNo = savedIndicator.activity_no ?? nextNo;
+      const savedLabel = savedIndicator.label || nextText;
+      // Use the saved PI values so local state mirrors Supabase after insert.
       updateTemplate((nextTemplate) => {
         nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity].push({
-          no: nextNo,
-          performanceIndicator: nextText,
+          no: savedNo,
+          performanceIndicator: savedLabel,
           subActivities: [],
         });
       });
@@ -624,10 +618,11 @@ export default function ManageTemplate({
       setEditingIndicatorIndex(null);
       onShowToast?.({
         title: "Performance indicator added",
-        description: `No. ${nextNo} was added under ${selectedKeyActivity}.`,
+        description: `No. ${savedNo} was added under ${selectedKeyActivity}.`,
         type: "success",
       });
     } catch (err) {
+      logTemplateCrudError("addIndicator", err);
       onShowToast?.({ title: "Error", description: err.message, type: "error" });
     }
   };
@@ -653,33 +648,36 @@ export default function ManageTemplate({
       return;
     }
     try {
-      const kaId = await getKeyActivityIdByName(selectedKeyActivity, selectedSubComponent, selectedComponent);
-      // Find the performance_indicator row by key_activity_id + old activity_no
-      const { data: piRow } = await supabase
-        .from('performance_indicators')
-        .select('id')
-        .eq('key_activity_id', kaId)
-        .eq('activity_no', selectedIndicator.no)
-        .maybeSingle();
-      if (piRow) {
-        await templateMgmtService.updatePerformanceIndicator(piRow.id, {
-          activity_no: nextNo,
-          label: nextText,
-        });
-      }
+      const piRow = await templateMgmtService.getPerformanceIndicatorRowByNo(
+        selectedIndicator.no,
+        selectedKeyActivity,
+        selectedSubComponent,
+        selectedComponent,
+      );
+      if (!piRow) throw new Error(`Performance indicator not found in Supabase: ${selectedIndicator.no}`);
+      const savedIndicator = await templateMgmtService.updatePerformanceIndicator(piRow.id, {
+        activity_no: nextNo,
+        label: nextText,
+      });
+      const savedNo = savedIndicator.activity_no ?? nextNo;
+      const savedLabel = savedIndicator.label || nextText;
       updateTemplate((nextTemplate) => {
-        nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity][selectedIndicatorIndex] = {
-          no: nextNo,
-          performanceIndicator: nextText,
+        const bucket = nextTemplate.hierarchy[selectedComponent]?.[selectedSubComponent]?.[selectedKeyActivity] || [];
+        const targetIndex = bucket.findIndex((item) => String(item.no) === String(selectedIndicator.no));
+        if (targetIndex === -1) return;
+        bucket[targetIndex] = {
+          no: savedNo,
+          performanceIndicator: savedLabel,
           subActivities: selectedIndicator.subActivities || [],
         };
       });
       onShowToast?.({
         title: "Indicator updated",
-        description: `No. ${nextNo} was updated successfully.`,
+        description: `No. ${savedNo} was updated successfully.`,
         type: "success",
       });
     } catch (err) {
+      logTemplateCrudError("saveIndicator", err);
       onShowToast?.({ title: "Error", description: err.message, type: "error" });
     }
   };
@@ -687,21 +685,21 @@ export default function ManageTemplate({
   const deleteIndicator = async () => {
     if (!deleteTarget || deleteTarget.kind !== "indicator" || !selectedComponent || !selectedSubComponent || !selectedKeyActivity) return;
     try {
-      const kaId = await getKeyActivityIdByName(selectedKeyActivity, selectedSubComponent, selectedComponent);
       const targetItem = indicatorItems[deleteTarget.index];
       if (targetItem) {
-        const { data: piRow } = await supabase
-          .from('performance_indicators')
-          .select('id')
-          .eq('key_activity_id', kaId)
-          .eq('activity_no', targetItem.no)
-          .maybeSingle();
-        if (piRow) {
-          await templateMgmtService.deletePerformanceIndicator(piRow.id);
-        }
+        const piRow = await templateMgmtService.getPerformanceIndicatorRowByNo(
+          targetItem.no,
+          selectedKeyActivity,
+          selectedSubComponent,
+          selectedComponent,
+        );
+        if (!piRow) throw new Error(`Performance indicator not found in Supabase: ${targetItem.no}`);
+        await templateMgmtService.deletePerformanceIndicator(piRow.id);
       }
       updateTemplate((nextTemplate) => {
-        nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity].splice(deleteTarget.index, 1);
+        const bucket = nextTemplate.hierarchy[selectedComponent]?.[selectedSubComponent]?.[selectedKeyActivity] || [];
+        const targetIndex = bucket.findIndex((item) => String(item.no) === String(targetItem?.no));
+        if (targetIndex !== -1) bucket.splice(targetIndex, 1);
       });
       onShowToast?.({
         title: "Indicator deleted",
@@ -709,6 +707,7 @@ export default function ManageTemplate({
         type: "success",
       });
     } catch (err) {
+      logTemplateCrudError("deleteIndicator", err);
       onShowToast?.({ title: "Error", description: err.message, type: "error" });
     }
     setEditingIndicatorIndex(null);
@@ -719,18 +718,42 @@ export default function ManageTemplate({
     const nextText = normalizeName(newSubActivityText);
     if (!selectedIndicator || !nextText) return;
     try {
-      const kaId = await getKeyActivityIdByName(selectedKeyActivity, selectedSubComponent, selectedComponent);
-      // Create sub_activity linked to the key_activity (FK references key_activities table)
-      await templateMgmtService.createSubActivity({
-        key_activity_id: kaId,
+      const keyActivityId = await templateMgmtService.getKeyActivityIdByName(
+        selectedKeyActivity,
+        selectedSubComponent,
+        selectedComponent,
+      );
+      const performanceIndicatorId = await templateMgmtService.getPerformanceIndicatorIdByNo(
+        selectedIndicator.no,
+        selectedKeyActivity,
+        selectedSubComponent,
+        selectedComponent,
+      );
+      const subActivityPayload = {
+        key_activity_id: keyActivityId,
+        performance_indicator_id: performanceIndicatorId,
         name: nextText,
         code: `${selectedKeyActivity.toUpperCase().replace(/ /g, '_')}_SA_${Date.now()}`,
         sort_order: subActivityItems.length + 1,
         is_active: true,
+      };
+      console.log('[ManageTemplate.addSubActivity] Prepared payload', {
+        component: selectedComponent,
+        subComponent: selectedSubComponent,
+        keyActivity: selectedKeyActivity,
+        selectedIndicator,
+        payload: subActivityPayload,
       });
+      // Pass both IDs because older Supabase schemas persist sub activities by
+      // key_activity_id, while newer ones may use performance_indicator_id.
+      const savedSubActivity = await templateMgmtService.createSubActivity(subActivityPayload);
+      console.log('[ManageTemplate.addSubActivity] Saved row returned from Supabase', savedSubActivity);
+      const savedName = savedSubActivity.name || nextText;
       updateTemplate((nextTemplate) => {
-        const targetIndicator = nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity][selectedIndicatorIndex];
-        targetIndicator.subActivities = [...(targetIndicator.subActivities || []), nextText];
+        const bucket = nextTemplate.hierarchy[selectedComponent]?.[selectedSubComponent]?.[selectedKeyActivity] || [];
+        const targetIndicator = bucket.find((item) => String(item.no) === String(selectedIndicator.no));
+        if (!targetIndicator) return;
+        targetIndicator.subActivities = [...(targetIndicator.subActivities || []), savedName];
       });
       setNewSubActivityText("");
       setSelectedSubActivityIndex(subActivityItems.length);
@@ -739,10 +762,11 @@ export default function ManageTemplate({
       setEditingSubActivityIndex(null);
       onShowToast?.({
         title: "Sub activity added",
-        description: "A new sub activity was added to the selected indicator.",
+        description: `Saved to Supabase with ID: ${savedSubActivity.id}`,
         type: "success",
       });
     } catch (err) {
+      logTemplateCrudError("addSubActivity", err);
       onShowToast?.({ title: "Error", description: err.message, type: "error" });
     }
   };
@@ -751,20 +775,30 @@ export default function ManageTemplate({
     const nextText = normalizeName(subActivityDraft);
     if (!selectedIndicator || !selectedSubActivity || !nextText) return;
     try {
-      const kaId = await getKeyActivityIdByName(selectedKeyActivity, selectedSubComponent, selectedComponent);
-      // Find the sub_activity row by name under this key_activity
-      const { data: saRow } = await supabase
-        .from('sub_activities')
-        .select('id')
-        .eq('key_activity_id', kaId)
-        .eq('name', selectedSubActivity)
-        .limit(1);
-      if (saRow && saRow.length > 0) {
-        await templateMgmtService.updateSubActivity(saRow[0].id, { name: nextText });
-      }
+      const keyActivityId = await templateMgmtService.getKeyActivityIdByName(
+        selectedKeyActivity,
+        selectedSubComponent,
+        selectedComponent,
+      );
+      const performanceIndicatorId = await templateMgmtService.getPerformanceIndicatorIdByNo(
+        selectedIndicator.no,
+        selectedKeyActivity,
+        selectedSubComponent,
+        selectedComponent,
+      );
+      const saRow = await templateMgmtService.getSubActivityRowByName({
+        keyActivityId,
+        performanceIndicatorId,
+        name: selectedSubActivity,
+      });
+      if (!saRow || saRow.length === 0) throw new Error(`Sub activity not found in Supabase: ${selectedSubActivity}`);
+      const savedSubActivity = await templateMgmtService.updateSubActivity(saRow[0].id, { name: nextText });
+      const savedName = savedSubActivity.name || nextText;
       updateTemplate((nextTemplate) => {
-        const targetIndicator = nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity][selectedIndicatorIndex];
-        targetIndicator.subActivities[selectedSubActivityIndex] = nextText;
+        const bucket = nextTemplate.hierarchy[selectedComponent]?.[selectedSubComponent]?.[selectedKeyActivity] || [];
+        const targetIndicator = bucket.find((item) => String(item.no) === String(selectedIndicator.no));
+        const targetIndex = targetIndicator?.subActivities?.findIndex((item) => item === selectedSubActivity) ?? -1;
+        if (targetIndex !== -1) targetIndicator.subActivities[targetIndex] = savedName;
       });
       onShowToast?.({
         title: "Sub activity updated",
@@ -772,6 +806,7 @@ export default function ManageTemplate({
         type: "success",
       });
     } catch (err) {
+      logTemplateCrudError("saveSubActivity", err);
       onShowToast?.({ title: "Error", description: err.message, type: "error" });
     }
   };
@@ -779,22 +814,32 @@ export default function ManageTemplate({
   const deleteSubActivity = async () => {
     if (!deleteTarget || deleteTarget.kind !== "subActivity" || !selectedIndicator) return;
     try {
-      const kaId = await getKeyActivityIdByName(selectedKeyActivity, selectedSubComponent, selectedComponent);
+      const keyActivityId = await templateMgmtService.getKeyActivityIdByName(
+        selectedKeyActivity,
+        selectedSubComponent,
+        selectedComponent,
+      );
+      const performanceIndicatorId = await templateMgmtService.getPerformanceIndicatorIdByNo(
+        selectedIndicator.no,
+        selectedKeyActivity,
+        selectedSubComponent,
+        selectedComponent,
+      );
       const targetName = subActivityItems[deleteTarget.index];
       if (targetName) {
-        const { data: saRow } = await supabase
-          .from('sub_activities')
-          .select('id')
-          .eq('key_activity_id', kaId)
-          .eq('name', targetName)
-          .limit(1);
-        if (saRow && saRow.length > 0) {
-          await templateMgmtService.deleteSubActivity(saRow[0].id);
-        }
+        const saRow = await templateMgmtService.getSubActivityRowByName({
+          keyActivityId,
+          performanceIndicatorId,
+          name: targetName,
+        });
+        if (!saRow || saRow.length === 0) throw new Error(`Sub activity not found in Supabase: ${targetName}`);
+        await templateMgmtService.deleteSubActivity(saRow[0].id);
       }
       updateTemplate((nextTemplate) => {
-        const targetIndicator = nextTemplate.hierarchy[selectedComponent][selectedSubComponent][selectedKeyActivity][selectedIndicatorIndex];
-        targetIndicator.subActivities.splice(deleteTarget.index, 1);
+        const bucket = nextTemplate.hierarchy[selectedComponent]?.[selectedSubComponent]?.[selectedKeyActivity] || [];
+        const targetIndicator = bucket.find((item) => String(item.no) === String(selectedIndicator.no));
+        const targetIndex = targetIndicator?.subActivities?.findIndex((item) => item === targetName) ?? -1;
+        if (targetIndex !== -1) targetIndicator.subActivities.splice(targetIndex, 1);
       });
       onShowToast?.({
         title: "Sub activity deleted",
@@ -802,6 +847,7 @@ export default function ManageTemplate({
         type: "success",
       });
     } catch (err) {
+      logTemplateCrudError("deleteSubActivity", err);
       onShowToast?.({ title: "Error", description: err.message, type: "error" });
     }
     setEditingSubActivityIndex(null);
