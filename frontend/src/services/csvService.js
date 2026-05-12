@@ -18,6 +18,21 @@ const MONTHS_LIST = [
     'dec'
 ]
 
+const MONTH_NAMES = {
+  jan: 'January',
+  feb: 'February',
+  mar: 'March',
+  apr: 'April',
+  may: 'May',
+  jun: 'June',
+  jul: 'July',
+  aug: 'August',
+  sep: 'September',
+  oct: 'October',
+  nov: 'November',
+  dec: 'December'
+};
+
 // CSV Export Service
 export const csvExportService = {
   /**
@@ -45,47 +60,56 @@ export const csvExportService = {
         throw error;
       }
 
-      // For each entry, fetch its monthly targets
-      const entriesWithBreakdown = await Promise.all(
-        (data || []).map(async (row) => {
-          // Fetch monthly targets for this entry
-          const { data: monthlyTargets } = await supabase
-            .from('monthly_targets')
-            .select('month, target_quantity')
-            .eq('entry_id', row.id);
+      const entryIds = (data || []).map((row) => row.id);
+      let targetsByEntryId = {};
 
-          // returns an array of JSONs
-          const monthlyBreakdown = MONTHS_LIST.map(month => {
-            const targetRecord = (monthlyTargets || []).find(mt => mt.month.toLowerCase() === month);
-            const amount = targetRecord ? (targetRecord.target_quantity) * (row.unit_cost || 0) : 0;
+      if (entryIds.length > 0) {
+        const { data: monthlyTargets, error: targetsError } = await supabase
+          .from('monthly_targets')
+          .select('entry_id, month, target_quantity')
+          .in('entry_id', entryIds);
 
-            return {
-                month: this.getMonthName(month),
-                amount: amount
-            }
-          })
+        if (targetsError) throw targetsError;
 
-          const flattenedBreakdown = {}
-          for (const item of monthlyBreakdown) {
-            flattenedBreakdown[item.month] = item.amount;
-          }
+        targetsByEntryId = (monthlyTargets || []).reduce((acc, target) => {
+          const entryId = target.entry_id;
+          if (!acc[entryId]) acc[entryId] = {};
+          acc[entryId][String(target.month || '').toLowerCase()] =
+            Number(target.target_quantity || 0);
+          return acc;
+        }, {});
+      }
 
-          // Calculate grand total from monthly breakdown
-          const grandTotal = monthlyBreakdown.reduce((sum, m) => sum + (m.amount || 0), 0);
+      const entriesWithBreakdown = (data || []).map((row) => {
+        const targets = targetsByEntryId[row.id] || {};
+        const monthlyBreakdown = MONTHS_LIST.reduce((acc, month) => {
+          acc[this.getMonthName(month)] =
+            Number(targets[month] || 0) * Number(row.unit_cost || 0);
+          return acc;
+        }, {});
 
-          return {
-            unit: normalizeUnitCode(row.units?.code || row.units?.name || ''), 
-            component: row.components?.name || '',
-            subComponent: row.sub_components?.name || '', 
-            keyActivity: row.key_activities?.name || '', 
-            no: row.key_activities?.activity_no || '', 
-            subActivity: row.sub_activities?.name || '', 
-            titleOfActivities: row.title_of_activities, 
-            monthlyBreakdown: flattenedBreakdown,
-            grandTotal: grandTotal,
-          };
-        })
-      );
+        const grandTotal = Object.values(monthlyBreakdown).reduce(
+          (sum, amount) => sum + Number(amount || 0),
+          0,
+        );
+
+        return {
+          unit: normalizeUnitCode(row.units?.code || row.units?.name || ''),
+          component: row.components?.name || '',
+          subComponent: row.sub_components?.name || '',
+          keyActivity: row.key_activities?.name || '',
+          no: row.no || row.activity_no || row.key_activities?.activity_no || '',
+          performanceIndicator:
+            row.performance_indicator ||
+            row.performanceIndicator ||
+            row.key_activities?.performance_indicator ||
+            '',
+          subActivity: row.sub_activities?.name || '',
+          titleOfActivities: row.title_of_activities,
+          monthlyBreakdown,
+          grandTotal,
+        };
+      });
 
       return entriesWithBreakdown;
     } catch (error) {
@@ -100,21 +124,7 @@ export const csvExportService = {
    * @returns {string} Full month name
    */
   getMonthName(monthCode) {
-    const months = {
-      'jan': 'January',
-      'feb': 'February',
-      'mar': 'March',
-      'apr': 'April',
-      'may': 'May',
-      'jun': 'June',
-      'jul': 'July',
-      'aug': 'August',
-      'sep': 'September',
-      'oct': 'October',
-      'nov': 'November',
-      'dec': 'December'
-    };
-    return months[monthCode?.toLowerCase()] || monthCode;
+    return MONTH_NAMES[monthCode?.toLowerCase()] || monthCode;
   },
 
   /**
@@ -129,6 +139,7 @@ export const csvExportService = {
       'Sub Component': entry.subComponent,
       'Key Activity': entry.keyActivity,
       'Activity No.': entry.no,
+      'Performance Indicator': entry.performanceIndicator,
       'Sub Activity': entry.subActivity,
       'Title of Activities': entry.titleOfActivities,
       ...entry.monthlyBreakdown,
@@ -156,6 +167,7 @@ export const csvExportService = {
       'Sub Component': '',
       'Key Activity': '',
       'Activity No.': '',
+      'Performance Indicator': '',
       'Sub Activity': '',
       'Title of Activities': '',
       ...monthlyTotals,
