@@ -27,6 +27,15 @@ function formatPersonName(profile) {
   return profile.full_name || profile.username || '';
 }
 
+function isBlankClassification(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return (
+    normalized === '' ||
+    normalized === 'n/a' ||
+    normalized.startsWith('select ')
+  );
+}
+
 // Authentication services
 export const authService = {
   async signUp(email, password, metadata = {}) {
@@ -377,7 +386,7 @@ export const entriesService = {
     };
     
     const findSubComponentId = async (name) => {
-      if (!name) return null;
+      if (isBlankClassification(name)) return null;
       const { data } = await supabase
         .from('sub_components')
         .select('id')
@@ -387,7 +396,7 @@ export const entriesService = {
     };
     
     const findKeyActivityId = async (name) => {
-      if (!name) return null;
+      if (isBlankClassification(name)) return null;
       const { data } = await supabase
         .from('key_activities')
         .select('id')
@@ -397,7 +406,7 @@ export const entriesService = {
     };
     
     const findSubActivityId = async (name) => {
-      if (!name || name === 'N/A' || name === 'Select sub activity' || name === '') return null;
+      if (isBlankClassification(name)) return null;
       const { data } = await supabase
         .from('sub_activities')
         .select('id')
@@ -409,14 +418,17 @@ export const entriesService = {
     // Get all IDs
     const unitId = await findUnitId(entryData.unit);
     const componentId = await findComponentId(entryData.component);
-    const subComponentId = await findSubComponentId(entryData.subComponent);
-    const keyActivityId = await findKeyActivityId(entryData.keyActivity);
-    const subActivityId = await findSubActivityId(entryData.subActivity);
+    const subComponentId =
+      entryData.subComponentId || await findSubComponentId(entryData.subComponent);
+    const keyActivityId =
+      entryData.keyActivityId || await findKeyActivityId(entryData.keyActivity);
+    const subActivityId =
+      entryData.subActivityId || await findSubActivityId(entryData.subActivity);
     
     if (!unitId) throw new Error(`Unit not found: ${entryData.unit}`);
     if (!componentId) throw new Error(`Component not found: ${entryData.component}`);
-    if (entryData.subComponent !== 'N/A' && !subComponentId) throw new Error(`Sub-component not found: ${entryData.subComponent}`);
-    if (entryData.keyActivity !== 'N/A' && !keyActivityId) throw new Error(`Key activity not found: ${entryData.keyActivity}`);
+    if (!isBlankClassification(entryData.subComponent) && !subComponentId) throw new Error(`Sub-component not found: ${entryData.subComponent}`);
+    if (!isBlankClassification(entryData.keyActivity) && !keyActivityId) throw new Error(`Key activity not found: ${entryData.keyActivity}`);
     
     // Insert entry
     const insertData = {
@@ -424,23 +436,14 @@ export const entriesService = {
       unit_id: unitId,
       planning_year: parseInt(entryData.planningYear),
       component_id: componentId,
+      sub_component_id: subComponentId || null,
+      key_activity_id: keyActivityId || null,
+      sub_activity_id: subActivityId || null,
       title_of_activities: entryData.titleOfActivities,
       unit_cost: entryData.unitCost || 0,
       status: 'Pending Review',
       submission_date: new Date().toISOString(),
     };
-
-    if (subComponentId) {
-      insertData.sub_component_id = subComponentId;
-    }
-
-    if (keyActivityId) {
-      insertData.key_activity_id = keyActivityId;
-    }
-
-    if (subActivityId) {
-      insertData.sub_activity_id = subActivityId;
-    }
 
     const insertDataWithClassification = {
       ...insertData,
