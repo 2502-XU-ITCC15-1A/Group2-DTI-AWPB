@@ -1,3 +1,5 @@
+import { FileDown } from "lucide-react"
+
 function formatCurrency(value) {
   return new Intl.NumberFormat("en-PH", {
     style: "currency",
@@ -43,6 +45,9 @@ function getPersonName(entry, prefix) {
   )
 }
 
+const gradientButtonClass =
+  "border-0 bg-gradient-to-r from-[#1f2f74] to-[#2a4694] text-white shadow-[0_6px_16px_rgba(31,47,116,0.28)] transition-all duration-200 hover:from-[#19265f] hover:to-[#213a80] hover:shadow-[0_10px_24px_rgba(31,47,116,0.38)]"
+
 export default function EntryDetailsModal({ entry, onClose, onExportToPdf }) {
   if (!entry) return null
 
@@ -58,10 +63,10 @@ export default function EntryDetailsModal({ entry, onClose, onExportToPdf }) {
       onClick={onClose}
     >
       <div
-        className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white shadow-xl"
+        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 flex items-start justify-between border-b bg-white px-6 py-4">
+        <div className="flex items-start justify-between border-b bg-white px-6 py-4">
           <div>
             <h2 className="text-xl font-bold">Entry Details</h2>
             <p className="text-sm text-gray-500">
@@ -78,7 +83,7 @@ export default function EntryDetailsModal({ entry, onClose, onExportToPdf }) {
           </button>
         </div>
 
-        <div className="space-y-6 p-6">
+        <div className="space-y-6 overflow-y-auto p-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <h3 className="text-lg font-semibold">{entry.titleOfActivities}</h3>
@@ -100,18 +105,6 @@ export default function EntryDetailsModal({ entry, onClose, onExportToPdf }) {
               {entry.status}
             </span>
           </div>
-
-          {isApprovedStatus && (
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => onExportToPdf?.(entry)}
-                className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
-              >
-                Export to PDF
-              </button>
-            </div>
-          )}
 
           {(entry.status === "Returned" || entry.status === "Rejected") &&
             entry.adminComment && (
@@ -208,6 +201,21 @@ export default function EntryDetailsModal({ entry, onClose, onExportToPdf }) {
             )}
           </div>
         </div>
+
+        {isApprovedStatus && (
+          <div className="border-t bg-white px-6 py-4">
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => onExportToPdf?.(entry)}
+                className={`inline-flex h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium ${gradientButtonClass}`}
+              >
+                <FileDown className="size-4" />
+                Export to PDF
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

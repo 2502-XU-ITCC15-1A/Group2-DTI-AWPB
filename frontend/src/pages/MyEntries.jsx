@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Eye, Pencil, Lock, Trash2 } from "lucide-react";
+import { Search, Eye, Pencil, Lock, Trash2, FileDown } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { generateApprovedEntryPdf } from "../services/pdfService";
 
@@ -418,11 +418,14 @@ export default function MyEntries({
                           {isApprovedStatus(entry.status) && (
                             <Button
                               type="button"
-                              variant="outline"
-                              size="sm"
+                              variant="ghost"
+                              size="icon-sm"
                               onClick={() => handleExportToPdf(entry)}
+                              title="Export approved entry to PDF"
+                              aria-label="Export approved entry to PDF"
+                              className="text-blue-600 hover:text-blue-700"
                             >
-                              Export to PDF
+                              <FileDown />
                             </Button>
                           )}
                         </div>
