@@ -774,16 +774,16 @@ export default function AdminReview({
             >
               <CardContent className="p-4">
                 <div className="space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
+                  <div className="flex items-start justify-between gap-2 min-[1500px]:gap-3">
+                    <div className="min-w-0">
+                      <p className="whitespace-nowrap text-[0.65rem] font-semibold uppercase tracking-[0.08em] text-white/60 min-[1500px]:text-xs min-[1500px]:tracking-wide">
                         Unit Allocation
                       </p>
                       <h2 className="mt-1 text-2xl font-bold tracking-tight">{unit}</h2>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold text-white/70">Remaining</p>
-                      <p className="text-2xl font-bold leading-tight">
+                      <p className="text-xs font-semibold text-white/70 min-[1500px]:text-sm">Remaining</p>
+                      <p className="whitespace-nowrap text-base font-bold leading-tight min-[1500px]:text-xl 2xl:text-2xl">
                         ₱{Number(stats.remaining || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                     </div>
