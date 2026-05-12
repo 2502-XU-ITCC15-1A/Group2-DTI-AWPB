@@ -143,17 +143,17 @@ export default function Home({ entries = [], submissionWindow }) {
         <div className="flex flex-wrap gap-2 mt-3">
           <Button
             asChild
-            className="border-0 bg-gradient-to-r from-[#1f2f74] to-[#2a4694] text-white shadow-[0_6px_16px_rgba(31,47,116,0.28)] transition-all duration-200 hover:from-[#19265f] hover:to-[#213a80] hover:shadow-[0_10px_24px_rgba(31,47,116,0.38)]"
-          >
-            <Link to="/submit">Add New Entry</Link>
-          </Button>
-
-          <Button
-            asChild
             variant="outline"
             className="border border-slate-200 bg-white text-slate-700 shadow-[0_3px_10px_rgba(15,23,42,0.08)] transition-all duration-200 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800 hover:shadow-[0_6px_16px_rgba(15,23,42,0.10)]"
           >
             <Link to="/entries">Go to My Entries</Link>
+          </Button>
+
+          <Button
+            asChild
+            className="border-0 bg-gradient-to-r from-[#1f2f74] to-[#2a4694] text-white shadow-[0_6px_16px_rgba(31,47,116,0.28)] transition-all duration-200 hover:from-[#19265f] hover:to-[#213a80] hover:shadow-[0_10px_24px_rgba(31,47,116,0.38)]"
+          >
+            <Link to="/submit">Add New Entry</Link>
           </Button>
 
         </div>

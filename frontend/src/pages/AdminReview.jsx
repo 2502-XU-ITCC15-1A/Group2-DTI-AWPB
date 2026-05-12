@@ -760,11 +760,11 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
                   ))}
                 </SelectContent>
               </Select>
-              <Button onClick={handleExportApprovedEntriesToCSV} className={`whitespace-nowrap ${gradientButtonClass}`}>
-                Export to CSV
-              </Button>
               <Button onClick={clearFilters} className={`whitespace-nowrap ${gradientButtonClass}`}>
                 Reset
+              </Button>
+              <Button onClick={handleExportApprovedEntriesToCSV} className={`whitespace-nowrap ${gradientButtonClass}`}>
+                Export to CSV
               </Button>
             </div>
           </div>
