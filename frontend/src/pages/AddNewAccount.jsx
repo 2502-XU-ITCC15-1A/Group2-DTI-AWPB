@@ -2,15 +2,13 @@ import { useState } from "react";
 
 import { useNavigate } from "react-router-dom";
 
-import { supabase } from "../lib/supabase";
-
-
-
 import { Button } from "@/components/ui/button";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { Input } from "@/components/ui/input";
+
+import { usersService } from "@/services/supabaseService";
 
 
 
@@ -47,6 +45,8 @@ export default function AddNewAccount({
   const [form, setForm] = useState(EMPTY_FORM);
 
   const [errors, setErrors] = useState({});
+
+  const [isSaving, setIsSaving] = useState(false);
 
 
 
@@ -99,6 +99,7 @@ export default function AddNewAccount({
     const nextErrors = {};
 
     const normalizedUsername = form.username.trim().toLowerCase();
+    const normalizedEmail = form.email.trim().toLowerCase();
 
 
 
@@ -130,7 +131,7 @@ export default function AddNewAccount({
 
     } else if (
 
-      accounts.some((account) => account.username === normalizedUsername)
+      accounts.some((account) => account.username?.trim().toLowerCase() === normalizedUsername)
 
     ) {
 
@@ -150,9 +151,17 @@ export default function AddNewAccount({
 
 
 
-    if (!form.email.trim()) {
+    if (!normalizedEmail) {
 
       nextErrors.email = "Email is required.";
+    } else if (
+      accounts.some(
+        (account) =>
+          account.role === form.role &&
+          account.email?.trim().toLowerCase() === normalizedEmail,
+      )
+    ) {
+      nextErrors.email = "This email is already assigned to another account with this role.";
 
     }
 
@@ -192,77 +201,38 @@ export default function AddNewAccount({
 
 
 
-      // CREATE AUTH USER — the handle_new_user trigger automatically creates the profile row
+      setIsSaving(true);
 
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      try {
+        const createdProfile = await usersService.create({
+          username: normalizedUsername,
+          fullName: form.fullName.trim(),
+          email: normalizedEmail,
+          password: form.password,
+          role: form.role,
+        });
 
-        email: form.email.trim(),
+        onAddAccount?.({
+          id: createdProfile.id,
+          username: createdProfile.username,
+          fullName: createdProfile.full_name,
+          email: createdProfile.email,
+          role: createdProfile.role,
+          status: createdProfile.status,
+        });
 
-        password: form.password,
+        onShowToast?.({
+          title: "Account created",
+          description: `${createdName} was added to All Accounts.`,
+          type: "success",
+        });
 
-        options: {
-
-          data: {
-
-            username: normalizedUsername,
-
-            full_name: form.fullName.trim(),
-
-            role: form.role,
-
-          }
-
-        }
-
-      });
-
-
-
-      if (authError) {
-
-        setErrors({ email: authError.message });
-
-        return;
-
+        navigate("/admin/manage-accounts");
+      } catch (error) {
+        setErrors({ email: error.message || "Could not create account." });
+      } finally {
+        setIsSaving(false);
       }
-
-
-
-      const userId = authData.user?.id;
-
-
-
-      onAddAccount?.({
-
-        id: userId,
-
-        username: normalizedUsername,
-
-        fullName: form.fullName.trim(),
-
-        email: form.email.trim(),
-
-        role: form.role,
-
-        status: "active",
-
-      });
-
-
-
-      onShowToast?.({
-
-        title: "Account created",
-
-        description: `${createdName} was added to All Accounts.`,
-
-        type: "success",
-
-      });
-
-
-
-      navigate("/admin/manage-accounts");
 
     }
 
@@ -559,12 +529,13 @@ export default function AddNewAccount({
               type="button"
 
               onClick={handleSave}
+              disabled={isSaving}
 
               className="rounded-lg border-0 bg-gradient-to-r from-[#1f2f74] to-[#2a4694] px-5 text-white hover:from-[#19265f] hover:to-[#213a80]"
 
             >
 
-              Save
+              {isSaving ? "Saving..." : "Save"}
 
             </Button>
 

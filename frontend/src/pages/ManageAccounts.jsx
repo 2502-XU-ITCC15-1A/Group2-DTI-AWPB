@@ -195,6 +195,7 @@ export default function ManageAccounts({
   const handleSaveChanges = () => {
     const nextErrors = {};
     const normalizedUsername = editForm.username.trim().toLowerCase();
+    const normalizedEmail = editForm.email.trim().toLowerCase();
 
     if (!normalizedUsername) {
       nextErrors.username = "Username is required.";
@@ -212,7 +213,8 @@ export default function ManageAccounts({
     } else if (
       accounts.some(
         (account) =>
-          account.id !== editTarget?.id && account.username === normalizedUsername,
+          account.id !== editTarget?.id &&
+          account.username?.trim().toLowerCase() === normalizedUsername,
       )
     ) {
       nextErrors.username = "This username is already assigned to another account.";
@@ -222,8 +224,17 @@ export default function ManageAccounts({
       nextErrors.fullName = "Full name is required.";
     }
 
-    if (!editForm.email.trim()) {
+    if (!normalizedEmail) {
       nextErrors.email = "Email is required.";
+    } else if (
+      accounts.some(
+        (account) =>
+          account.id !== editTarget?.id &&
+          account.role === editForm.role &&
+          account.email?.trim().toLowerCase() === normalizedEmail,
+      )
+    ) {
+      nextErrors.email = "This email is already assigned to another account with this role.";
     }
 
     if (editForm.password || editForm.confirmPassword) {
@@ -245,7 +256,7 @@ export default function ManageAccounts({
       const updates = {
         username: normalizedUsername,
         fullName: editForm.fullName.trim(),
-        email: editForm.email.trim(),
+        email: normalizedEmail,
         role: editForm.role,
         status: editTarget.status,
       };

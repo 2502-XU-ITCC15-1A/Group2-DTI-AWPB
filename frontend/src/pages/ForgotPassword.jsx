@@ -51,8 +51,12 @@ export default function ForgotPassword() {
         return;
       }
 
+      const authEmail = await authService.getLoginEmailByUsername(normalizedUsername);
+
+      if (!authEmail) throw new Error("Account login email was not found.");
+
       await authService.requestPasswordReset(
-        normalizedEmail,
+        authEmail,
         `${window.location.origin}/confirm-password`
       );
 

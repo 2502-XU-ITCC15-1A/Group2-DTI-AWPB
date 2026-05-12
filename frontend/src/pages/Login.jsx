@@ -3,9 +3,8 @@ import { Link } from "react-router-dom"
 import { Eye, EyeOff } from "lucide-react"
 import logo from "../assets/logo.png"
 import { authService } from "../services/supabaseService"
-import { supabase } from "../lib/supabase"
 
-export default function Login({ onLogin, accounts = [] }) {
+export default function Login({ onLogin }) {
     const [showPassword, setShowPassword] = useState(false)
     const [formData, setFormData] = useState({
         username: "",
@@ -41,18 +40,16 @@ export default function Login({ onLogin, accounts = [] }) {
             let email = rawInput
 
             if (!rawInput.includes('@')) {
-                const { data: lookedUpEmail, error: rpcError } = await supabase
-                    .rpc('get_email_by_username', { p_username: rawInput })
+                const lookedUpEmail = await authService.getLoginEmailByUsername(rawInput)
 
-                if (rpcError || !lookedUpEmail) {
+                if (!lookedUpEmail) {
                     setError("Invalid username or password.")
-                    console.error('Username lookup failed:', rpcError)
                     return
                 }
                 email = lookedUpEmail
             }
 
-            const { user, session } = await authService.signIn(email, formData.password)
+            const { user } = await authService.signIn(email, formData.password)
             
             // Get user profile to get role
             const profile = await authService.getProfile(user.id)

@@ -51,6 +51,21 @@ export const authService = {
     return data;
   },
 
+  async getLoginEmailByUsername(username) {
+    const { data: authEmail, error: authEmailError } = await supabase
+      .rpc('get_auth_email_by_username', { p_username: username });
+
+    if (!authEmailError && authEmail) {
+      return authEmail;
+    }
+
+    const { data: profileEmail, error: profileEmailError } = await supabase
+      .rpc('get_email_by_username', { p_username: username });
+
+    if (profileEmailError) throw authEmailError || profileEmailError;
+    return profileEmail;
+  },
+
   async requestPasswordReset(email, redirectTo) {
     const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo,
@@ -131,26 +146,23 @@ export const usersService = {
   },
 
   async create(userData) {
-    const { data: { session: adminSession } } = await supabase.auth.getSession();
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: userData.email,
-      password: userData.password,
-      options: {
-        data: {
-          username: userData.username,
-          full_name: userData.fullName,
-          role: userData.role
-        }
-      }
-    });
-    if (authError) throw authError;
-    if (adminSession) {
-      await supabase.auth.setSession({
-        access_token: adminSession.access_token,
-        refresh_token: adminSession.refresh_token
+    const { data, error } = await supabase
+      .rpc('admin_create_user_account', {
+        p_username: userData.username,
+        p_full_name: userData.fullName,
+        p_email: userData.email,
+        p_role: userData.role,
+        p_password: userData.password,
       });
+    if (error) {
+      if (error.message?.includes('admin_create_user_account')) {
+        throw new Error(
+          'The database account-creation migration has not been applied yet. Please apply supabase/migrations/011_admin_create_user_account_and_unique_login.sql, then try again.',
+        );
+      }
+      throw error;
     }
-    return authData;
+    return data;
   },
 
   async update(userId, updates) {
