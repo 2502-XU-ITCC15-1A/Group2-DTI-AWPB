@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, Eye, Trash2, History, Pencil } from "lucide-react";
-import { generateApprovedEntryPdf } from "../services/pdfService";
-import { csvExportService } from "../services/csvService";
 
 import AdminEntryReviewModal from "../components/admin/AdminEntryReviewModal";
 import AdminDeleteEntryModal from "../components/admin/AdminDeleteEntryModal";
@@ -293,6 +291,7 @@ export default function AdminReview({
 
     setPdfExportingEntryId(entry.id);
     try {
+      const { generateApprovedEntryPdf } = await import("../services/pdfService");
       const { filename } = await generateApprovedEntryPdf(entry);
       onShowToast?.({
         title: "PDF generated",
@@ -315,6 +314,7 @@ export default function AdminReview({
 
     setCsvExporting(true);
     try {
+      const { csvExportService } = await import("../services/csvService");
       const result = await csvExportService.exportApprovedEntriesToCSV();
       onShowToast?.({
         title: "CSV export successful",

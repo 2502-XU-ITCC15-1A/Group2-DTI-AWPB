@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, Eye, Pencil, Lock, Trash2, FileDown, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { generateApprovedEntryPdf } from "../services/pdfService";
 
 import EntryDetailsModal from "../components/entries/EntryDetailsModal";
 import AdminDeleteEntryModal from "../components/admin/AdminDeleteEntryModal";
@@ -176,6 +175,7 @@ export default function MyEntries({
 
     setPdfExportingEntryId(entry.id);
     try {
+      const { generateApprovedEntryPdf } = await import("../services/pdfService");
       const { filename } = await generateApprovedEntryPdf(entry);
       onShowToast?.({
         title: "PDF exported",

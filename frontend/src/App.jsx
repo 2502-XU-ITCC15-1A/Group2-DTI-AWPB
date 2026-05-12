@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import AppLayout from "./components/layout/AppLayout";
 import initialTemplateData from "./data/awpb_dropdown_tree.json";
@@ -6,17 +6,6 @@ import initialTemplateData from "./data/awpb_dropdown_tree.json";
 import { getTemplateHierarchy } from "./services/templateService";
 
 import Login from "./pages/Login";
-import ForgotPassword from "./pages/ForgotPassword";
-import ConfirmPassword from "./pages/ConfirmPassword";
-import ChooseView from "./pages/ChooseView";
-import Home from "./pages/Home";
-import MyEntries from "./pages/MyEntries";
-import SubmitEntry from "./pages/SubmitEntry";
-import AdminReview from "./pages/AdminReview";
-import AdminDashboard from "./pages/AdminDashboard";
-import ManageAccounts from "./pages/ManageAccounts";
-import AddNewAccount from "./pages/AddNewAccount";
-import ManageTemplate from "./pages/ManageTemplate";
 
 import {
   authService,
@@ -28,6 +17,18 @@ import {
 
 const INITIAL_ACCOUNTS = [];
 const ADMIN_VIEW_STORAGE_KEY = "awpb_admin_active_view";
+
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ConfirmPassword = lazy(() => import("./pages/ConfirmPassword"));
+const ChooseView = lazy(() => import("./pages/ChooseView"));
+const Home = lazy(() => import("./pages/Home"));
+const MyEntries = lazy(() => import("./pages/MyEntries"));
+const SubmitEntry = lazy(() => import("./pages/SubmitEntry"));
+const AdminReview = lazy(() => import("./pages/AdminReview"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const ManageAccounts = lazy(() => import("./pages/ManageAccounts"));
+const AddNewAccount = lazy(() => import("./pages/AddNewAccount"));
+const ManageTemplate = lazy(() => import("./pages/ManageTemplate"));
 
 function getStoredAdminView() {
   const storedView = window.localStorage.getItem(ADMIN_VIEW_STORAGE_KEY);
@@ -43,6 +44,14 @@ function getDefaultAuthenticatedPath(role, activeView) {
 
 function createInitialTemplateState() {
   return JSON.parse(JSON.stringify(initialTemplateData));
+}
+
+function PageLoadingFallback() {
+  return (
+    <div className="flex min-h-[220px] items-center justify-center">
+      <p className="text-sm text-slate-500">Loading page...</p>
+    </div>
+  );
 }
 
 function App() {
@@ -577,30 +586,34 @@ async function loadTemplate() {
 
   if (!isAuthenticated) {
     return (
-      <Routes>
-        <Route path="/login" element={<Login onLogin={handleLogin} accounts={accounts} />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/confirm-password" element={<ConfirmPassword />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
+      <Suspense fallback={<PageLoadingFallback />}>
+        <Routes>
+          <Route path="/login" element={<Login onLogin={handleLogin} accounts={accounts} />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/confirm-password" element={<ConfirmPassword />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </Suspense>
     );
   }
 
   if (currentRole === "admin" && !activeView) {
     return (
-      <Routes>
-        <Route
-          path="/choose-view"
-          element={
-            <ChooseView
-              currentUser={authUser}
-              onChooseView={handleChooseView}
-              onLogout={handleLogout}
-            />
-          }
-        />
-        <Route path="*" element={<Navigate to="/choose-view" replace />} />
-      </Routes>
+      <Suspense fallback={<PageLoadingFallback />}>
+        <Routes>
+          <Route
+            path="/choose-view"
+            element={
+              <ChooseView
+                currentUser={authUser}
+                onChooseView={handleChooseView}
+                onLogout={handleLogout}
+              />
+            }
+          />
+          <Route path="*" element={<Navigate to="/choose-view" replace />} />
+        </Routes>
+      </Suspense>
     );
   }
 
@@ -628,21 +641,23 @@ async function loadTemplate() {
       toast={toast}
       onDismissToast={() => { if (toast?.id) dismissToast(toast.id); }}
     >
-      <Routes>
-        <Route path="/login" element={<Navigate to={defaultAuthenticatedPath} replace />} />
-        <Route path="/forgot-password" element={<Navigate to={defaultAuthenticatedPath} replace />} />
-        <Route path="/confirm-password" element={<Navigate to={defaultAuthenticatedPath} replace />} />
-        <Route path="/choose-view" element={currentRole === "admin" ? <ChooseView currentUser={authUser} onChooseView={handleChooseView} /> : <Navigate to="/" replace />} />
-        <Route path="/" element={canUseEncoderView ? <Home entries={encoderEntries} submissionWindow={submissionWindow} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
-        <Route path="/entries" element={canUseEncoderView ? <MyEntries entries={encoderEntries} onEditEntry={handleStartEdit} onDeleteEntry={handleDeleteEntry} onShowToast={showToast} submissionWindow={submissionWindow} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
-        <Route path="/submit" element={canUseEncoderView ? <SubmitEntry onAddEntry={handleAddEntry} entryToEdit={entryBeingEdited} onSaveEditedEntry={handleSaveEditedEntry} clearEditingEntry={clearEditingEntry} submissionWindow={submissionWindow} draftState={submitEntryDraft} onDraftChange={setSubmitEntryDraft} onClearDraft={clearSubmitEntryDraft} currentUser={authUser} onShowToast={showToast} templateData={templateData} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
-        <Route path="/admin/manage-template" element={canUseAdminView ? <ManageTemplate templateData={templateData} onUpdateTemplateData={setTemplateData} onResetTemplate={() => setTemplateData(createInitialTemplateState())} onShowToast={showToast} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
-        <Route path="/admin/dashboard" element={canUseAdminView ? <AdminDashboard entries={entries} submissionWindow={submissionWindow} onUpdateSubmissionWindow={handleUpdateSubmissionWindow} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
-        <Route path="/admin/review" element={canUseAdminView ? <AdminReview entries={entries} currentUser={authUser} onReplaceEntry={handleReplaceEntry} onRemoveEntry={handleRemoveEntry} onUpdateEntry={handleUpdateEntry} onDeleteEntry={handleDeleteEntry} onShowToast={showToast} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
-        <Route path="/admin/manage-accounts" element={canUseAdminView ? <ManageAccounts accounts={accounts} onUpdateAccount={handleUpdateAccount} onShowToast={showToast} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
-        <Route path="/admin/manage-accounts/new" element={canUseAdminView ? <AddNewAccount accounts={accounts} onAddAccount={handleAddAccount} onShowToast={showToast} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
-        <Route path="*" element={<Navigate to={defaultAuthenticatedPath} replace />} />
-      </Routes>
+      <Suspense fallback={<PageLoadingFallback />}>
+        <Routes>
+          <Route path="/login" element={<Navigate to={defaultAuthenticatedPath} replace />} />
+          <Route path="/forgot-password" element={<Navigate to={defaultAuthenticatedPath} replace />} />
+          <Route path="/confirm-password" element={<Navigate to={defaultAuthenticatedPath} replace />} />
+          <Route path="/choose-view" element={currentRole === "admin" ? <ChooseView currentUser={authUser} onChooseView={handleChooseView} /> : <Navigate to="/" replace />} />
+          <Route path="/" element={canUseEncoderView ? <Home entries={encoderEntries} submissionWindow={submissionWindow} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
+          <Route path="/entries" element={canUseEncoderView ? <MyEntries entries={encoderEntries} onEditEntry={handleStartEdit} onDeleteEntry={handleDeleteEntry} onShowToast={showToast} submissionWindow={submissionWindow} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
+          <Route path="/submit" element={canUseEncoderView ? <SubmitEntry onAddEntry={handleAddEntry} entryToEdit={entryBeingEdited} onSaveEditedEntry={handleSaveEditedEntry} clearEditingEntry={clearEditingEntry} submissionWindow={submissionWindow} draftState={submitEntryDraft} onDraftChange={setSubmitEntryDraft} onClearDraft={clearSubmitEntryDraft} currentUser={authUser} onShowToast={showToast} templateData={templateData} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
+          <Route path="/admin/manage-template" element={canUseAdminView ? <ManageTemplate templateData={templateData} onUpdateTemplateData={setTemplateData} onResetTemplate={() => setTemplateData(createInitialTemplateState())} onShowToast={showToast} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
+          <Route path="/admin/dashboard" element={canUseAdminView ? <AdminDashboard entries={entries} submissionWindow={submissionWindow} onUpdateSubmissionWindow={handleUpdateSubmissionWindow} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
+          <Route path="/admin/review" element={canUseAdminView ? <AdminReview entries={entries} currentUser={authUser} onReplaceEntry={handleReplaceEntry} onRemoveEntry={handleRemoveEntry} onUpdateEntry={handleUpdateEntry} onDeleteEntry={handleDeleteEntry} onShowToast={showToast} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
+          <Route path="/admin/manage-accounts" element={canUseAdminView ? <ManageAccounts accounts={accounts} onUpdateAccount={handleUpdateAccount} onShowToast={showToast} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
+          <Route path="/admin/manage-accounts/new" element={canUseAdminView ? <AddNewAccount accounts={accounts} onAddAccount={handleAddAccount} onShowToast={showToast} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
+          <Route path="*" element={<Navigate to={defaultAuthenticatedPath} replace />} />
+        </Routes>
+      </Suspense>
     </AppLayout>
   );
 }

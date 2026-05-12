@@ -92,7 +92,7 @@ async function loadImageDataUrl(url) {
   });
 }
 
-async function generateWithJsPdfFallback(entry, controlNumber, filename) {
+async function generateWithJsPdf(entry, controlNumber, filename) {
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({
     orientation: "portrait",
@@ -187,6 +187,31 @@ async function generateWithJsPdfFallback(entry, controlNumber, filename) {
     );
   };
 
+  const drawCertification = () => {
+    ensureSpace(42);
+    y += 7;
+    doc.setFont("helvetica", "bold").setFontSize(10.5);
+    doc.text("CERTIFICATION", margin, y);
+
+    y += 11;
+    doc.setFont("helvetica", "normal").setFontSize(9);
+    const leftX = margin;
+    const rightX = margin + contentWidth / 2 + 6;
+
+    doc.text("Prepared by:", leftX, y);
+    doc.line(leftX + 28, y + 3, leftX + 78, y + 3);
+    doc.text("Reviewed by:", rightX, y);
+    doc.line(rightX + 28, y + 3, rightX + 78, y + 3);
+
+    y += 16;
+    doc.text("Approved by:", leftX, y);
+    doc.line(leftX + 28, y + 3, leftX + 78, y + 3);
+    doc.text("Date:", rightX, y);
+    doc.line(rightX + 14, y + 3, rightX + 78, y + 3);
+
+    y += 8;
+  };
+
   try {
     const logoDataUrl = await loadImageDataUrl(logoUrl);
     doc.addImage(logoDataUrl, "PNG", margin + 2, y + 2, 46, 17);
@@ -233,6 +258,7 @@ async function generateWithJsPdfFallback(entry, controlNumber, filename) {
   drawRow("Reviewed At", formatDate(entry.reviewedAt));
   drawRow("Admin Comment", entry.adminComment || "-", 12);
   drawMonthlyBreakdownTable();
+  drawCertification();
 
   doc.save(filename);
 }
@@ -240,223 +266,7 @@ async function generateWithJsPdfFallback(entry, controlNumber, filename) {
 export async function generateApprovedEntryPdf(entry) {
   const controlNumber = `DTI-AWPB-${new Date().getFullYear()}-${String(entry.id).slice(0, 8)}`;
   const filename = `AWPB_${controlNumber}.pdf`;
-  try {
-    const [{ default: PDFDocument }, { default: blobStream }] = await Promise.all([
-      import("pdfkit/js/pdfkit.standalone.js"),
-      import("blob-stream"),
-    ]);
-
-    const doc = new PDFDocument({ size: "A4", margin: 42 });
-    const stream = doc.pipe(blobStream());
-
-    const pageWidth = doc.page.width;
-    const pageHeight = doc.page.height;
-    const margin = 42;
-    const contentWidth = pageWidth - margin * 2;
-    const labelWidth = 125;
-    const logoX = margin + 6;
-    const logoY = 48;
-    const logoWidth = 130;
-    const logoHeight = 50;
-    const monthlyRows = getMonthlyRows(entry);
-    const reportTotals = getReportTotals(entry, monthlyRows);
-    let y = 42;
-    const headerTextCenterX = margin + (contentWidth + logoWidth) / 2;
-
-    const ensureSpace = (height) => {
-      if (y + height > pageHeight - 78) {
-        doc.addPage();
-        y = 46;
-      }
-    };
-
-    const drawRow = (label, value, minHeight = 24) => {
-      const textValue = value ?? "N/A";
-      const valueWidth = contentWidth - labelWidth - 12;
-      const valueHeight = doc
-        .font("Helvetica")
-        .fontSize(10)
-        .heightOfString(String(textValue), { width: valueWidth });
-      const rowHeight = Math.max(minHeight, valueHeight + 10);
-
-      ensureSpace(rowHeight);
-
-      doc.lineWidth(0.7).strokeColor("#777");
-      doc.rect(margin, y, contentWidth, rowHeight).stroke();
-      doc.moveTo(margin + labelWidth, y).lineTo(margin + labelWidth, y + rowHeight).stroke();
-
-      doc.font("Helvetica-Bold").fontSize(10).fillColor("#000");
-      doc.text(label, margin + 6, y + 7, { width: labelWidth - 10 });
-
-      doc.font("Helvetica").fontSize(10);
-      doc.text(String(textValue), margin + labelWidth + 6, y + 7, { width: valueWidth });
-
-      y += rowHeight;
-    };
-
-    const drawSectionTitle = (title) => {
-      ensureSpace(28);
-      y += 12;
-      doc.font("Helvetica-Bold").fontSize(11).fillColor("#000");
-      doc.text(title, margin + 6, y);
-      y += 18;
-    };
-
-    const drawMonthlyBreakdownTable = () => {
-      drawSectionTitle("MONTHLY BREAKDOWN");
-
-      if (monthlyRows.length === 0) {
-        drawRow("Monthly Breakdown", "No monthly breakdown found.");
-        return;
-      }
-
-      const columns = [
-        { label: "Month", width: 220, align: "left" },
-        { label: "Target", width: 105, align: "right" },
-        { label: "Amount", width: contentWidth - 325, align: "right" },
-      ];
-      const rowHeight = 24;
-
-      const drawTableRow = (cells, isHeader = false) => {
-        ensureSpace(rowHeight);
-        doc
-          .lineWidth(0.7)
-          .strokeColor("#777")
-          .rect(margin, y, contentWidth, rowHeight)
-          .fillAndStroke(isHeader ? "#f3f4f6" : "#ffffff", "#777");
-
-        let x = margin;
-        doc.font(isHeader ? "Helvetica-Bold" : "Helvetica").fontSize(10).fillColor("#000");
-
-        cells.forEach((cell, index) => {
-          const column = columns[index];
-          doc.text(String(cell), x + 6, y + 7, {
-            width: column.width - 12,
-            align: column.align,
-          });
-
-          if (index < columns.length - 1) {
-            doc.moveTo(x + column.width, y).lineTo(x + column.width, y + rowHeight).stroke();
-          }
-
-          x += column.width;
-        });
-
-        y += rowHeight;
-      };
-
-      drawTableRow(columns.map((column) => column.label), true);
-      monthlyRows.forEach((row) => {
-        drawTableRow([row.month, formatTarget(row.target), formatCurrency(row.amount)]);
-      });
-      drawTableRow(
-        ["Total", formatTarget(reportTotals.totalTarget), formatCurrency(reportTotals.totalAmount)],
-        true,
-      );
-    };
-
-    const drawCertification = () => {
-      ensureSpace(96);
-      y += 12;
-      doc.font("Helvetica-Bold").fontSize(11).fillColor("#000");
-      doc.text("CERTIFICATION", margin + 6, y);
-
-      y += 20;
-      doc.font("Helvetica").fontSize(10);
-      doc.text("Prepared by:", margin + 6, y);
-      doc.moveTo(margin + 72, y + 10).lineTo(margin + 230, y + 10).stroke();
-      doc.text("Reviewed by:", margin + 265, y);
-      doc.moveTo(margin + 332, y + 10).lineTo(margin + 500, y + 10).stroke();
-
-      y += 34;
-      doc.text("Approved by:", margin + 6, y);
-      doc.moveTo(margin + 72, y + 10).lineTo(margin + 230, y + 10).stroke();
-      doc.text("Date:", margin + 265, y);
-      doc.moveTo(margin + 298, y + 10).lineTo(margin + 500, y + 10).stroke();
-    };
-
-    doc.lineWidth(1).strokeColor("#555");
-    doc.rect(margin, y, contentWidth, pageHeight - margin - y).stroke();
-
-    try {
-      const logoDataUrl = await loadImageDataUrl(logoUrl);
-      doc.image(logoDataUrl, logoX, logoY, { width: logoWidth, height: logoHeight });
-    } catch {
-      // Continue even if logo load fails.
-    }
-
-    doc.fillColor("#000").font("Helvetica-Bold").fontSize(17);
-    doc.text("DEPARTMENT OF TRADE AND INDUSTRY", headerTextCenterX, y + 18, {
-      align: "center",
-      width: 250,
-    });
-    doc.fontSize(12);
-    doc.text("RAPID Growth Project - Region X", headerTextCenterX, y + 42, {
-      align: "center",
-      width: 250,
-    });
-    doc.fontSize(14);
-    doc.text("ANNUAL WORK PLAN AND BUDGET (AWPB)", headerTextCenterX, y + 68, {
-      align: "center",
-      width: 250,
-    });
-    doc.fontSize(12);
-    doc.text("APPROVED ENTRY REPORT", headerTextCenterX, y + 88, {
-      align: "center",
-      width: 250,
-    });
-
-    y = 124;
-    y = Math.max(y, logoY + logoHeight + 18);
-    doc.font("Helvetica").fontSize(9.5);
-    doc.text(`Control Number: ${controlNumber}`, margin + 6, y);
-    doc.text(`Generated: ${formatDate(new Date().toISOString())}`, pageWidth - margin - 6, y, {
-      align: "right",
-      width: 250,
-    });
-
-    y += 12;
-    drawRow("Entry ID", String(entry.id || "N/A"));
-    drawRow("Planning Year", String(entry.planningYear || "N/A"));
-    drawRow("Unit", entry.unit || "N/A");
-    drawRow("Status", entry.status || "Approved");
-    drawRow("Title of Activities", entry.titleOfActivities || "N/A", 34);
-    drawRow("Component", entry.component || "N/A");
-    drawRow("Sub Component", entry.subComponent || "N/A");
-    drawRow("Key Activity", entry.keyActivity || "N/A", 30);
-    drawRow("Activity No.", entry.no || "N/A");
-    drawRow("Performance Indicator", entry.performanceIndicator || "N/A", 34);
-    drawRow("Sub Activity", entry.subActivity || "N/A");
-    drawRow("Unit Cost", formatCurrency(entry.unitCost));
-    drawRow("Total Target", formatTarget(reportTotals.totalTarget));
-    drawRow("Grand Total", formatCurrency(reportTotals.totalAmount));
-    drawRow("Submitted By", getPersonName(entry, "owner"));
-    drawRow("Reviewed By", getPersonName(entry, "reviewer"));
-    drawRow("Submitted At", formatDate(entry.submittedAt));
-    drawRow("Reviewed At", formatDate(entry.reviewedAt));
-    drawRow("Admin Comment", entry.adminComment || "-", 34);
-
-    drawMonthlyBreakdownTable();
-    drawCertification();
-
-    doc.end();
-
-    await new Promise((resolve) => {
-      stream.on("finish", resolve);
-    });
-
-    const blobUrl = stream.toBlobURL("application/pdf");
-    const link = document.createElement("a");
-    link.href = blobUrl;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(blobUrl);
-  } catch (error) {
-    console.warn("PDFKit export failed, using jsPDF fallback:", error);
-    await generateWithJsPdfFallback(entry, controlNumber, filename);
-  }
+  await generateWithJsPdf(entry, controlNumber, filename);
 
   return { filename, controlNumber };
 }
