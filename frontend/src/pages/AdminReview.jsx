@@ -76,6 +76,8 @@ const gradientButtonClass =
 export default function AdminReview({
   currentUser,
   entries: entriesProp = [],
+  onReplaceEntry,
+  onRemoveEntry,
   onUpdateEntry,
   onDeleteEntry,
   onShowToast,
@@ -180,32 +182,21 @@ export default function AdminReview({
     });
   }, [entries, searchTerm, statusFilter, unitFilter, yearFilter]);
 
-  const persistEntryUpdate = async (entryId, uiUpdates, successToast) => {
-    const dbUpdates = {
-      status: uiUpdates.status,
-      adminComment: uiUpdates.adminComment ?? "",
-      reviewedAt: uiUpdates.reviewedAt,
-      reviewerId: currentAdminId,
-    };
+  const replaceEntryFromDatabase = async (entryId) => {
+    const updatedEntry = await entriesService.getById(entryId);
+    if (onReplaceEntry) {
+      onReplaceEntry(entryId, updatedEntry);
+    } else {
+      onUpdateEntry?.(entryId, updatedEntry);
+    }
+    return updatedEntry;
+  };
 
-    try {
-      await entriesService.update(entryId, dbUpdates);
-      onUpdateEntry?.(entryId, {
-        ...uiUpdates,
-        reviewerId: currentAdminId,
-        reviewerUsername: currentUser?.username || "",
-        reviewerFullName: currentUser?.fullName || "",
-        reviewerDisplayName: currentUser?.fullName || currentUser?.username || "",
-      });
-      onShowToast?.(successToast);
-      setSelectedEntry(null);
-    } catch (err) {
-      console.error("Failed to update entry in Supabase:", err);
-      onShowToast?.({
-        title: "Could not save changes",
-        description: err.message || "Please try again.",
-        type: "error",
-      });
+  const removeEntryFromState = (entryId) => {
+    if (onRemoveEntry) {
+      onRemoveEntry(entryId);
+    } else {
+      onDeleteEntry?.(entryId);
     }
   };
 
@@ -216,57 +207,7 @@ export default function AdminReview({
       actor_name: currentUser?.fullName || currentUser?.username || "",
     };
 
-    const insertPayload = async (nextPayload) =>
-      supabase.from("budget_transactions").insert(nextPayload);
-
-    const shouldTryLegacyPayload = (error) => {
-      if (!error) return false;
-      const message = error.message || "";
-      return (
-        error.code === "PGRST204" ||
-        message.includes("actor_id") ||
-        message.includes("actor_name") ||
-        message.includes("entry_id") ||
-        message.includes("schema cache")
-      );
-    };
-
-    const payloadAttempts = [
-      payload,
-      (() => {
-        const next = { ...payload };
-        delete next.entry_id;
-        return next;
-      })(),
-      (() => {
-        const next = { ...payload };
-        delete next.actor_name;
-        delete next.entry_id;
-        return next;
-      })(),
-      (() => {
-        const next = { ...payload };
-        delete next.actor_id;
-        delete next.entry_id;
-        return next;
-      })(),
-      (() => {
-        const next = { ...payload };
-        delete next.actor_id;
-        delete next.actor_name;
-        delete next.entry_id;
-        return next;
-      })(),
-    ];
-
-    let error = null;
-    for (const nextPayload of payloadAttempts) {
-      const result = await insertPayload(nextPayload);
-      error = result.error;
-      if (!error) return;
-      if (!shouldTryLegacyPayload(error)) break;
-    }
-
+    const { error } = await supabase.from("budget_transactions").insert(payload);
     if (error) throw error;
   };
 
@@ -287,8 +228,9 @@ export default function AdminReview({
     const entryTitle = selectedEntry.titleOfActivities;
     const entryUnit = normalizeUnitCode(selectedEntry.unit);
 
+    const hasLoadedUnitBudget = Object.prototype.hasOwnProperty.call(unitBudgets, entryUnit);
     const unitBudget = unitBudgets[entryUnit] || 0;
-    if (entryAmount > unitBudget) {
+    if (hasLoadedUnitBudget && entryAmount > unitBudget) {
       onShowToast?.({
         title: "Insufficient allocation",
         description: `Need ₱${entryAmount.toLocaleString()} but ${entryUnit} only has ₱${unitBudget.toLocaleString()} remaining. Edit the unit allocation first.`,
@@ -299,46 +241,34 @@ export default function AdminReview({
     }
 
     try {
-      const latestEntry = await entriesService.getById(selectedEntry.id);
-      if (isApprovedStatus(latestEntry.status)) {
-        onShowToast?.({
-          title: "Already approved",
-          description:
-            "This entry was already approved. Allocation was not deducted again.",
-          type: "info",
-        });
-        setSelectedEntry(null);
-        return;
-      }
-
-      await insertBudgetTransaction({
-        amount: entryAmount,
-        type: "DEDUCTED",
-        description: `Approved: ${entryTitle}`,
-        unit: entryUnit,
-        entry_id: selectedEntry.id,
+      const { error } = await supabase.rpc("admin_approve_entry", {
+        p_entry_id: selectedEntry.id,
+        p_note: note || "",
       });
+      if (error) throw error;
 
-      await persistEntryUpdate(
-        selectedEntry.id,
-        {
-          status: "Approved",
-          adminComment: note || "",
-          reviewedAt: new Date().toISOString(),
-        },
-        {
-          title: "Entry approved",
-          description: `${entryTitle} was approved successfully. ₱${entryAmount.toLocaleString()} deducted from ${entryUnit}'s remaining allocation.`,
-          type: "success",
-        },
-      );
-
-      await loadBudgetData();
+      await replaceEntryFromDatabase(selectedEntry.id).catch((refreshError) => {
+        console.error("Failed to refresh approved entry:", refreshError);
+      });
+      await loadBudgetData().catch((refreshError) => {
+        console.error("Failed to refresh budget data after approval:", refreshError);
+      });
+      setSelectedEntry(null);
+      onShowToast?.({
+        title: "Entry approved",
+        description: `${entryTitle} was approved successfully. ₱${entryAmount.toLocaleString()} deducted from ${entryUnit}'s remaining allocation.`,
+        type: "success",
+      });
     } catch (err) {
       console.error("Failed to approve entry:", err);
       const isDuplicateApproval =
         err.code === "23505" ||
-        err.message?.includes("idx_budget_transactions_single_approval_deduction");
+        err.message?.toLowerCase?.().includes("already approved");
+      if (isDuplicateApproval) {
+        await replaceEntryFromDatabase(selectedEntry.id).catch(() => null);
+        await loadBudgetData().catch(() => null);
+        setSelectedEntry(null);
+      }
       onShowToast?.({
         title: isDuplicateApproval ? "Already approved" : "Could not approve entry",
         description: isDuplicateApproval
@@ -387,39 +317,6 @@ export default function AdminReview({
     }
   };
   
-  const reverseBudgetDeduction = async (
-    entryTitle,
-    amount,
-    oldStatus,
-    newStatus,
-    entryUnit,
-  ) => {
-    try {
-      await insertBudgetTransaction({
-        amount: amount,
-        type: "ADDED",
-        description: `REVERSAL: "${entryTitle}" changed from ${oldStatus} → ${newStatus}`,
-        unit: normalizeUnitCode(entryUnit) || null,
-      });
-
-      onShowToast?.({
-        title: "Allocation restored",
-        description: `₱${amount.toLocaleString()} was added back to the allocation for: ${entryTitle}`,
-        type: "success",
-      });
-
-      return true;
-    } catch (err) {
-      console.error("Failed to reverse allocation deduction:", err);
-      onShowToast?.({
-        title: "Could not restore allocation",
-        description: err.message || "Please check the transaction history.",
-        type: "error",
-      });
-      return false;
-    }
-  };
-
   const handleReturn = async (note) => {
     if (!selectedEntry || reviewActionBusy) return;
     setReviewActionBusy(true);
@@ -429,39 +326,32 @@ export default function AdminReview({
     const entryAmount = selectedEntry.grandTotal || 0;
 
     try {
-      // Check if it was approved and reverse allocation deduction if needed
-      if (isApprovedStatus(oldStatus)) {
-        console.log(
-          `Entry was ${oldStatus}, reversing allocation deduction of ₱${entryAmount.toLocaleString()}`,
-        );
-        const reversed = await reverseBudgetDeduction(
-          entryTitle,
-          entryAmount,
-          oldStatus,
-          newStatus,
-          selectedEntry.unit,
-        );
-        if (!reversed) {
-          return; // Stop if reversal failed
-        }
-      }
+      const { error } = await supabase.rpc("admin_set_entry_review_status", {
+        p_entry_id: selectedEntry.id,
+        p_status: newStatus,
+        p_note: note || "",
+      });
+      if (error) throw error;
 
-      // Update the entry status (this runs for ALL returns, not just approved ones)
-      await persistEntryUpdate(
-        selectedEntry.id,
-        {
-          status: newStatus,
-          adminComment: note,
-          reviewedAt: new Date().toISOString(),
-        },
-        {
-          title: "Entry returned",
-          description: `${entryTitle} was returned for revision.${isApprovedStatus(oldStatus) ? ` ₱${entryAmount.toLocaleString()} restored to allocation.` : ""}`,
-          type: "success",
-        },
-      );
-
-      await loadBudgetData();
+      await replaceEntryFromDatabase(selectedEntry.id).catch((refreshError) => {
+        console.error("Failed to refresh returned entry:", refreshError);
+      });
+      await loadBudgetData().catch((refreshError) => {
+        console.error("Failed to refresh budget data after return:", refreshError);
+      });
+      setSelectedEntry(null);
+      onShowToast?.({
+        title: "Entry returned",
+        description: `${entryTitle} was returned for revision.${isApprovedStatus(oldStatus) ? ` ₱${entryAmount.toLocaleString()} restored to allocation.` : ""}`,
+        type: "success",
+      });
+    } catch (err) {
+      console.error("Failed to return entry:", err);
+      onShowToast?.({
+        title: "Could not return entry",
+        description: err.message || "Please try again.",
+        type: "error",
+      });
     } finally {
       setReviewActionBusy(false);
     }
@@ -476,34 +366,32 @@ export default function AdminReview({
     const entryAmount = selectedEntry.grandTotal || 0;
 
     try {
-      if (isApprovedStatus(oldStatus)) {
-        console.log(
-          `Entry was ${oldStatus}, reversing allocation deduction of ₱${entryAmount.toLocaleString()}`,
-        );
-        const reversed = await reverseBudgetDeduction(
-          entryTitle,
-          entryAmount,
-          oldStatus,
-          newStatus,
-          selectedEntry.unit,
-        );
-        if (!reversed) return;
-      }
+      const { error } = await supabase.rpc("admin_set_entry_review_status", {
+        p_entry_id: selectedEntry.id,
+        p_status: newStatus,
+        p_note: note || "",
+      });
+      if (error) throw error;
 
-      await persistEntryUpdate(
-        selectedEntry.id,
-        {
-          status: newStatus,
-          adminComment: note,
-          reviewedAt: new Date().toISOString(),
-        },
-        {
-          title: "Entry rejected",
-          description: `${entryTitle} was rejected.${isApprovedStatus(oldStatus) ? ` ₱${entryAmount.toLocaleString()} restored to allocation.` : ""}`,
-          type: "success",
-        },
-      );
-      await loadBudgetData();
+      await replaceEntryFromDatabase(selectedEntry.id).catch((refreshError) => {
+        console.error("Failed to refresh rejected entry:", refreshError);
+      });
+      await loadBudgetData().catch((refreshError) => {
+        console.error("Failed to refresh budget data after rejection:", refreshError);
+      });
+      setSelectedEntry(null);
+      onShowToast?.({
+        title: "Entry rejected",
+        description: `${entryTitle} was rejected.${isApprovedStatus(oldStatus) ? ` ₱${entryAmount.toLocaleString()} restored to allocation.` : ""}`,
+        type: "success",
+      });
+    } catch (err) {
+      console.error("Failed to reject entry:", err);
+      onShowToast?.({
+        title: "Could not reject entry",
+        description: err.message || "Please try again.",
+        type: "error",
+      });
     } finally {
       setReviewActionBusy(false);
     }
@@ -526,20 +414,15 @@ export default function AdminReview({
     const shouldRestoreAllocation = isApprovedStatus(entryStatus) && entryAmount > 0;
 
     try {
-      if (shouldRestoreAllocation) {
-        const reversed = await reverseBudgetDeduction(
-          entryTitle,
-          entryAmount,
-          entryStatus,
-          "Deleted",
-          entryUnit,
-        );
-        if (!reversed) return;
-      }
+      const { error } = await supabase.rpc("admin_delete_review_entry", {
+        p_entry_id: deleteTarget.id,
+      });
+      if (error) throw error;
 
-      await entriesService.delete(deleteTarget.id);
-      onDeleteEntry?.(deleteTarget.id);
-      await loadBudgetData();
+      removeEntryFromState(deleteTarget.id);
+      await loadBudgetData().catch((refreshError) => {
+        console.error("Failed to refresh budget data after delete:", refreshError);
+      });
       onShowToast?.({
         title: "Entry deleted",
         description: `${entryTitle} was removed successfully.${
