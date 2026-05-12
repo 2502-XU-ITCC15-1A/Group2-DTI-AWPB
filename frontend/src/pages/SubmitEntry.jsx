@@ -300,6 +300,7 @@ export default function SubmitEntry({
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [targetValidationMessage, setTargetValidationMessage] = useState("");
+  const [isSubmittingEntry, setIsSubmittingEntry] = useState(false);
 
   // -------------------------------------------------------------------------
   // Load dropdown data from Supabase. Uses the JSON prop as an initial
@@ -720,7 +721,7 @@ export default function SubmitEntry({
   };
 
   const handleStepClick = async (targetStep) => {
-    if (formLocked) return;
+    if (formLocked || isSubmittingEntry) return;
     if (targetStep === step) return;
 
     if (targetStep === 1) {
@@ -759,7 +760,7 @@ export default function SubmitEntry({
   };
 
   const goToStep2 = async () => {
-    if (formLocked) return;
+    if (formLocked || isSubmittingEntry) return;
     const isValid = await validateStep1();
 
     if (isValid) {
@@ -768,7 +769,7 @@ export default function SubmitEntry({
   };
 
   const goToStep3 = async () => {
-    if (formLocked) return;
+    if (formLocked || isSubmittingEntry) return;
     const isValid = await validateStep2();
 
     if (isValid) {
@@ -776,7 +777,9 @@ export default function SubmitEntry({
     }
   };
 
-  const onSubmit = (data) => {
+  const onSubmit = async (data) => {
+    if (isSubmittingEntry) return;
+
     if (!windowOpen) {
       onShowToast?.({
         title: "Encoding period closed",
@@ -841,12 +844,17 @@ export default function SubmitEntry({
         resubmittedAt: new Date().toISOString(),
       };
 
-      onSaveEditedEntry(entryToEdit.id, updatedEntry);
-      reset(defaultFormValues);
-      setStep(1);
-      onClearDraft?.();
-      clearEditingEntry?.();
-      navigate("/entries");
+      setIsSubmittingEntry(true);
+      try {
+        await onSaveEditedEntry(entryToEdit.id, updatedEntry);
+        reset(defaultFormValues);
+        setStep(1);
+        onClearDraft?.();
+        clearEditingEntry?.();
+        navigate("/entries");
+      } finally {
+        setIsSubmittingEntry(false);
+      }
       return;
     }
 
@@ -880,12 +888,17 @@ export default function SubmitEntry({
       submittedAt: new Date().toISOString(),
     };
 
-    onAddEntry(newEntry);
-    reset(defaultFormValues);
-    setStep(1);
-    onClearDraft?.();
-    clearEditingEntry?.();
-    navigate("/entries");
+    setIsSubmittingEntry(true);
+    try {
+      await onAddEntry(newEntry);
+      reset(defaultFormValues);
+      setStep(1);
+      onClearDraft?.();
+      clearEditingEntry?.();
+      navigate("/entries");
+    } finally {
+      setIsSubmittingEntry(false);
+    }
   };
 
   const steps = [
@@ -944,36 +957,36 @@ export default function SubmitEntry({
 
       <Card className="border-0 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
         <CardContent className="p-6">
-        <div className="mb-8 grid grid-cols-1 gap-3 md:grid-cols-3">
-          {steps.map((item) => {
-            const isActive = step === item.number;
-            const isDone = step > item.number;
+          <div className="mb-8 grid grid-cols-1 gap-3 md:grid-cols-3">
+            {steps.map((item) => {
+              const isActive = step === item.number;
+              const isDone = step > item.number;
 
-            return (
-              <button
-                key={item.number}
-                type="button"
-                onClick={() => handleStepClick(item.number)}
-                disabled={formLocked}
-                className={`w-full rounded-lg px-4 py-3 text-left text-sm font-medium transition-none ${
-                  isActive
-                    ? "border border-transparent bg-gradient-to-r from-[#1f2f74] to-[#2a4694] text-white"
-                    : isDone
-                      ? "border border-slate-300 bg-slate-100 text-slate-800"
-                      : "border border-slate-200 bg-white text-slate-500"
-                }`}
-              >
-                Step {item.number}: {item.label}
-              </button>
-            );
-          })}
-        </div>
+              return (
+                <button
+                  key={item.number}
+                  type="button"
+                  onClick={() => handleStepClick(item.number)}
+                  disabled={formLocked || isSubmittingEntry}
+                  className={`w-full rounded-lg px-4 py-3 text-left text-sm font-medium transition-none ${
+                    isActive
+                      ? "border border-transparent bg-gradient-to-r from-[#1f2f74] to-[#2a4694] text-white"
+                      : isDone
+                        ? "border border-slate-300 bg-slate-100 text-slate-800"
+                        : "border border-slate-200 bg-white text-slate-500"
+                  }`}
+                >
+                  Step {item.number}: {item.label}
+                </button>
+              );
+            })}
+          </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-          <fieldset
-            disabled={formLocked}
-            className={formLocked ? "space-y-8 opacity-70" : "space-y-8"}
-          >
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+            <fieldset
+              disabled={formLocked || isSubmittingEntry}
+              className={formLocked || isSubmittingEntry ? "space-y-8 opacity-70" : "space-y-8"}
+            >
           {step === 1 && (
             <div className="space-y-6">
               <div>
@@ -1586,22 +1599,28 @@ export default function SubmitEntry({
 
                 <Button
                   type="submit"
-                  disabled={!windowOpen}
+                  disabled={!windowOpen || isSubmittingEntry}
                   className={`px-4 text-[15px] border-0 ${
-                    windowOpen
+                    windowOpen && !isSubmittingEntry
                       ? "bg-gradient-to-r from-[#1f2f74] to-[#2a4694] text-white shadow-[0_6px_16px_rgba(31,47,116,0.28)] transition-all duration-200 hover:from-[#19265f] hover:to-[#213a80] hover:shadow-[0_10px_24px_rgba(31,47,116,0.38)]"
-                      : "cursor-not-allowed bg-gray-300 text-gray-600"
+                      : isSubmittingEntry
+                        ? "cursor-wait bg-[#233f8f] text-white opacity-75"
+                        : "cursor-not-allowed bg-gray-300 text-gray-600"
                   }`}
                 >
-                  {isEditingReturnedEntry
-                    ? "Resubmit Entry"
-                    : "Submit to My Entries"}
+                  {isSubmittingEntry
+                    ? isEditingReturnedEntry
+                      ? "Resubmitting..."
+                      : "Submitting..."
+                    : isEditingReturnedEntry
+                      ? "Resubmit Entry"
+                      : "Submit to My Entries"}
                 </Button>
               </div>
             </div>
           )}
-          </fieldset>
-        </form>
+            </fieldset>
+          </form>
         </CardContent>
       </Card>
     </div>

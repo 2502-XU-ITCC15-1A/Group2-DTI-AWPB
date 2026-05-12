@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
-import { Eye, EyeOff } from "lucide-react"
+import { Eye, EyeOff, Loader2 } from "lucide-react"
 import logo from "../assets/logo.png"
 import { authService } from "../services/supabaseService"
 
@@ -11,6 +11,7 @@ export default function Login({ onLogin }) {
         password: "",
     })
     const [error, setError] = useState("")
+    const [isSubmitting, setIsSubmitting] = useState(false)
 
     const handleChange = (e) => {
         const { name, value } = e.target
@@ -29,6 +30,7 @@ export default function Login({ onLogin }) {
         }
 
         setError("")
+        setIsSubmitting(true)
         
         try {
             // Resolve the input to an email address.
@@ -72,6 +74,8 @@ export default function Login({ onLogin }) {
         } catch (error) {
             setError("Invalid username or password.")
             console.error('Login error:', error)
+        } finally {
+            setIsSubmitting(false)
         }
     }
 
@@ -103,8 +107,9 @@ export default function Login({ onLogin }) {
                             name="username"
                             value={formData.username}
                             onChange={handleChange}
+                            disabled={isSubmitting}
                             placeholder="Username or email"
-                            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:ring-2 focus:ring-slate-300"
+                            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition disabled:bg-slate-100 disabled:text-slate-500 focus:ring-2 focus:ring-slate-300"
                         />
                         
                     </div>
@@ -120,14 +125,16 @@ export default function Login({ onLogin }) {
                                 name="password"
                                 value={formData.password}
                                 onChange={handleChange}
+                                disabled={isSubmitting}
                                 placeholder="At least 8 characters"
-                                className="w-full rounded-2xl border border-slate-300 px-4 py-3 pr-12 text-sm outline-none transition focus:ring-2 focus:ring-slate-300"
+                                className="w-full rounded-2xl border border-slate-300 px-4 py-3 pr-12 text-sm outline-none transition disabled:bg-slate-100 disabled:text-slate-500 focus:ring-2 focus:ring-slate-300"
                             />
 
                             <button
                                 type="button"
                                 onClick={() => setShowPassword((prev) => !prev)}
-                                className="absolute inset-y-0 right-0 flex items-center px-4 text-slate-500"
+                                disabled={isSubmitting}
+                                className="absolute inset-y-0 right-0 flex items-center px-4 text-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                             </button>
@@ -151,9 +158,11 @@ export default function Login({ onLogin }) {
 
                     <button
                         type="submit"
-                        className="w-full rounded-full bg-[#233f8f] px-4 py-3 text-base font-semibold text-white shadow-md transition hover:opacity-90"
+                        disabled={isSubmitting}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#233f8f] px-4 py-3 text-base font-semibold text-white shadow-md transition hover:opacity-90 disabled:cursor-wait disabled:opacity-75"
                     >
-                        SIGN IN
+                        {isSubmitting && <Loader2 className="size-4 animate-spin" />}
+                        {isSubmitting ? "SIGNING IN..." : "SIGN IN"}
                     </button>
                 </form>
 

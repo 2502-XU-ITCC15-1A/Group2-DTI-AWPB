@@ -20,6 +20,7 @@ export default function AdminUnitAllocationModal({
   onSave,
   onTypeChange,
   remaining = 0,
+  saving = false,
   unit,
 }) {
   return (
@@ -40,6 +41,7 @@ export default function AdminUnitAllocationModal({
           <button
             type="button"
             onClick={onClose}
+            disabled={saving}
             className="rounded-xl p-2 text-white/85 transition hover:bg-white/15 hover:text-white"
           >
             <X className="h-5 w-5" />
@@ -69,6 +71,7 @@ export default function AdminUnitAllocationModal({
               <button
                 type="button"
                 onClick={() => onTypeChange?.("ADDED")}
+                disabled={saving}
                 className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
                   adjustmentType === "ADDED"
                     ? "bg-[#233f8f] text-white shadow-sm"
@@ -80,6 +83,7 @@ export default function AdminUnitAllocationModal({
               <button
                 type="button"
                 onClick={() => onTypeChange?.("DEDUCTED")}
+                disabled={saving}
                 className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
                   adjustmentType === "DEDUCTED"
                     ? "bg-[#233f8f] text-white shadow-sm"
@@ -100,6 +104,7 @@ export default function AdminUnitAllocationModal({
               placeholder="0.00"
               value={amount}
               onChange={(event) => onAmountChange?.(event.target.value)}
+              disabled={saving}
               className="h-12 rounded-xl border-slate-200 bg-white text-lg font-medium"
             />
           </div>
@@ -117,6 +122,7 @@ export default function AdminUnitAllocationModal({
               }
               value={description}
               onChange={(event) => onDescriptionChange?.(event.target.value)}
+              disabled={saving}
               className="h-12 rounded-xl border-slate-200 bg-white"
             />
           </div>
@@ -126,13 +132,15 @@ export default function AdminUnitAllocationModal({
           <Button
             type="button"
             onClick={onSave}
-            className="flex-1 rounded-xl border-0 bg-gradient-to-r from-[#1f2f74] to-[#2a4694] text-white hover:from-[#19265f] hover:to-[#213a80]"
+            disabled={saving}
+            className="flex-1 rounded-xl border-0 bg-gradient-to-r from-[#1f2f74] to-[#2a4694] text-white hover:from-[#19265f] hover:to-[#213a80] disabled:cursor-wait disabled:opacity-75"
           >
-            Save Adjustment
+            {saving ? "Saving..." : "Save Adjustment"}
           </Button>
           <Button
             type="button"
             onClick={onClose}
+            disabled={saving}
             variant="outline"
             className="flex-1 rounded-xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
           >

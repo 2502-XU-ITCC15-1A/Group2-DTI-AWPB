@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Eye, Pencil, Lock, Trash2, FileDown } from "lucide-react";
+import { Search, Eye, Pencil, Lock, Trash2, FileDown, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { generateApprovedEntryPdf } from "../services/pdfService";
 
@@ -92,6 +92,7 @@ export default function MyEntries({
   const [statusFilter, setStatusFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("all");
   const [currentUserId, setCurrentUserId] = useState(null);
+  const [pdfExportingEntryId, setPdfExportingEntryId] = useState(null);
   const navigate = useNavigate();
 
   // Get current logged-in user
@@ -171,8 +172,9 @@ export default function MyEntries({
   };
 
   const handleExportToPdf = async (entry) => {
-    if (!isApprovedStatus(entry.status)) return;
+    if (!isApprovedStatus(entry.status) || pdfExportingEntryId) return;
 
+    setPdfExportingEntryId(entry.id);
     try {
       const { filename } = await generateApprovedEntryPdf(entry);
       onShowToast?.({
@@ -186,6 +188,8 @@ export default function MyEntries({
         description: "Could not export this approved entry to PDF.",
         type: "error",
       });
+    } finally {
+      setPdfExportingEntryId(null);
     }
   };
 
@@ -421,11 +425,16 @@ export default function MyEntries({
                               variant="ghost"
                               size="icon-sm"
                               onClick={() => handleExportToPdf(entry)}
+                              disabled={Boolean(pdfExportingEntryId)}
                               title="Export approved entry to PDF"
                               aria-label="Export approved entry to PDF"
-                              className="text-blue-600 hover:text-blue-700"
+                              className="text-blue-600 hover:text-blue-700 disabled:cursor-wait disabled:opacity-70"
                             >
-                              <FileDown />
+                              {pdfExportingEntryId === entry.id ? (
+                                <Loader2 className="animate-spin" />
+                              ) : (
+                                <FileDown />
+                              )}
                             </Button>
                           )}
                         </div>
@@ -441,6 +450,7 @@ export default function MyEntries({
 
       <EntryDetailsModal
         entry={selectedEntry}
+        isExportingPdf={pdfExportingEntryId === selectedEntry?.id}
         onClose={() => setSelectedEntry(null)}
         onExportToPdf={handleExportToPdf}
       />

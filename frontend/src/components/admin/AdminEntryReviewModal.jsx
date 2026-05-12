@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { FileDown } from "lucide-react"
+import { FileDown, Loader2 } from "lucide-react"
 
 function formatCurrency(value) {
   return new Intl.NumberFormat("en-PH", {
@@ -48,12 +48,14 @@ function getPersonName(entry, prefix) {
 
 export default function AdminEntryReviewModal({
   actionBusy = false,
+  busyAction = "",
   entry,
   onClose,
   onApprove,
   onReturn,
   onReject,
   onGenerateApprovedEntry,
+  pdfExporting = false,
 }) {
   if (!entry) return null
 
@@ -61,24 +63,28 @@ export default function AdminEntryReviewModal({
     <AdminEntryReviewModalContent
       key={entry.id}
       actionBusy={actionBusy}
+      busyAction={busyAction}
       entry={entry}
       onApprove={onApprove}
       onClose={onClose}
       onGenerateApprovedEntry={onGenerateApprovedEntry}
       onReject={onReject}
       onReturn={onReturn}
+      pdfExporting={pdfExporting}
     />
   )
 }
 
 function AdminEntryReviewModalContent({
   actionBusy,
+  busyAction,
   entry,
   onClose,
   onApprove,
   onReturn,
   onReject,
   onGenerateApprovedEntry,
+  pdfExporting,
 }) {
   const [reviewNote, setReviewNote] = useState(entry?.adminComment || "")
   const [reviewError, setReviewError] = useState("")
@@ -113,7 +119,7 @@ function AdminEntryReviewModalContent({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-      onClick={onClose}
+      onClick={() => !actionBusy && onClose()}
     >
       <div
         className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-xl"
@@ -130,7 +136,8 @@ function AdminEntryReviewModalContent({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
+            disabled={actionBusy}
+            className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Close
           </button>
@@ -271,28 +278,33 @@ function AdminEntryReviewModalContent({
               <button
                 type="button"
                 onClick={() => onGenerateApprovedEntry?.(entry)}
-                className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
+                disabled={pdfExporting || actionBusy}
+                className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-wait disabled:opacity-75"
               >
-                <FileDown className="size-4" />
-                Export to PDF
+                {pdfExporting ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <FileDown className="size-4" />
+                )}
+                {pdfExporting ? "Exporting..." : "Export to PDF"}
               </button>
             )}
             <button
               type="button"
               onClick={handleReturn}
               disabled={actionBusy}
-              className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
+              className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:cursor-wait disabled:opacity-75"
             >
-              Return for Revision
+              {busyAction === "return" ? "Returning..." : "Return for Revision"}
             </button>
 
             <button
               type="button"
               onClick={handleReject}
               disabled={actionBusy}
-              className="rounded-lg border border-gray-300 bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
+              className="rounded-lg border border-gray-300 bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:cursor-wait disabled:opacity-75"
             >
-              Reject
+              {busyAction === "reject" ? "Rejecting..." : "Reject"}
             </button>
 
             {!isApprovedStatus && (
@@ -302,7 +314,7 @@ function AdminEntryReviewModalContent({
                 disabled={actionBusy}
                 className="rounded-lg border border-green-200 bg-green-100 px-4 py-2 text-sm font-medium text-green-800 transition hover:bg-green-200 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {actionBusy ? "Approving..." : "Approve"}
+                {busyAction === "approve" ? "Approving..." : "Approve"}
               </button>
             )}
           </div>

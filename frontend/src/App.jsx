@@ -377,6 +377,7 @@ async function loadTemplate() {
         description: `${created.titleOfActivities} was submitted.`,
         type: "success",
       });
+      return created;
     } catch (error) {
       console.error("Failed to create entry:", error);
       showToast({
@@ -384,6 +385,7 @@ async function loadTemplate() {
         description: error.message,
         type: "error",
       });
+      throw error;
     }
   };
 

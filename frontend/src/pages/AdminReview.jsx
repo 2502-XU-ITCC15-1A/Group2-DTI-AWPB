@@ -101,6 +101,11 @@ export default function AdminReview({
   const [unitBudgetDesc, setUnitBudgetDesc] = useState("");
   const [unitBudgetAdjustmentType, setUnitBudgetAdjustmentType] = useState("ADDED");
   const [reviewActionBusy, setReviewActionBusy] = useState(false);
+  const [reviewBusyAction, setReviewBusyAction] = useState("");
+  const [pdfExportingEntryId, setPdfExportingEntryId] = useState(null);
+  const [csvExporting, setCsvExporting] = useState(false);
+  const [deleteActionBusy, setDeleteActionBusy] = useState(false);
+  const [unitAllocationSaving, setUnitAllocationSaving] = useState(false);
 
   const entries = entriesProp;
   const currentAdminId = currentUser?.id || null;
@@ -223,7 +228,6 @@ export default function AdminReview({
       return;
     }
 
-    setReviewActionBusy(true);
     const entryAmount = selectedEntry.grandTotal || 0;
     const entryTitle = selectedEntry.titleOfActivities;
     const entryUnit = normalizeUnitCode(selectedEntry.unit);
@@ -236,9 +240,11 @@ export default function AdminReview({
         description: `Need ₱${entryAmount.toLocaleString()} but ${entryUnit} only has ₱${unitBudget.toLocaleString()} remaining. Edit the unit allocation first.`,
         type: "error",
       });
-      setReviewActionBusy(false);
       return;
     }
+
+    setReviewActionBusy(true);
+    setReviewBusyAction("approve");
 
     try {
       const { error } = await supabase.rpc("admin_approve_entry", {
@@ -278,12 +284,14 @@ export default function AdminReview({
       });
     } finally {
       setReviewActionBusy(false);
+      setReviewBusyAction("");
     }
   };
 
   const handleGenerateApprovedEntry = async (entry) => {
-    if (!isApprovedStatus(entry.status)) return;
+    if (!isApprovedStatus(entry.status) || pdfExportingEntryId) return;
 
+    setPdfExportingEntryId(entry.id);
     try {
       const { filename } = await generateApprovedEntryPdf(entry);
       onShowToast?.({
@@ -297,10 +305,15 @@ export default function AdminReview({
         description: "Could not generate the approved entry PDF.",
         type: "error",
       });
+    } finally {
+      setPdfExportingEntryId(null);
     }
   };
 
   const handleExportApprovedEntriesToCSV = async () => {
+    if (csvExporting) return;
+
+    setCsvExporting(true);
     try {
       const result = await csvExportService.exportApprovedEntriesToCSV();
       onShowToast?.({
@@ -314,12 +327,15 @@ export default function AdminReview({
         description: error.message || "Could not export approved entries to CSV.",
         type: "error",
       });
+    } finally {
+      setCsvExporting(false);
     }
   };
   
   const handleReturn = async (note) => {
     if (!selectedEntry || reviewActionBusy) return;
     setReviewActionBusy(true);
+    setReviewBusyAction("return");
     const entryTitle = selectedEntry.titleOfActivities;
     const oldStatus = selectedEntry.status;
     const newStatus = "Returned";
@@ -354,12 +370,14 @@ export default function AdminReview({
       });
     } finally {
       setReviewActionBusy(false);
+      setReviewBusyAction("");
     }
   };
 
   const handleReject = async (note) => {
     if (!selectedEntry || reviewActionBusy) return;
     setReviewActionBusy(true);
+    setReviewBusyAction("reject");
     const entryTitle = selectedEntry.titleOfActivities;
     const oldStatus = selectedEntry.status;
     const newStatus = "Rejected";
@@ -394,6 +412,7 @@ export default function AdminReview({
       });
     } finally {
       setReviewActionBusy(false);
+      setReviewBusyAction("");
     }
   };
     
@@ -406,13 +425,14 @@ export default function AdminReview({
   };
 
   const handleDelete = async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || deleteActionBusy) return;
     const entryTitle = deleteTarget.titleOfActivities;
     const entryAmount = Number(deleteTarget.grandTotal || 0);
     const entryStatus = deleteTarget.status;
     const entryUnit = normalizeUnitCode(deleteTarget.unit);
     const shouldRestoreAllocation = isApprovedStatus(entryStatus) && entryAmount > 0;
 
+    setDeleteActionBusy(true);
     try {
       const { error } = await supabase.rpc("admin_delete_review_entry", {
         p_entry_id: deleteTarget.id,
@@ -443,6 +463,8 @@ export default function AdminReview({
         description: err.message || "Please try again.",
         type: "error",
       });
+    } finally {
+      setDeleteActionBusy(false);
     }
   };
   //connects sa supabase
@@ -529,6 +551,8 @@ export default function AdminReview({
   };
 
   const handleSaveUnitAllocation = async () => {
+    if (unitAllocationSaving) return;
+
     const amount = parseFloat(unitBudgetAmount);
     const unit = activeUnitBudgetModal;
     if (!amount || amount <= 0) {
@@ -549,6 +573,7 @@ export default function AdminReview({
       return;
     }
 
+    setUnitAllocationSaving(true);
     try {
       await insertBudgetTransaction({
         amount: amount,
@@ -574,6 +599,8 @@ export default function AdminReview({
         description: err.message || "Please try again.",
         type: "error",
       });
+    } finally {
+      setUnitAllocationSaving(false);
     }
   };
 
@@ -720,6 +747,7 @@ export default function AdminReview({
           onSave={handleSaveUnitAllocation}
           onTypeChange={setUnitBudgetAdjustmentType}
           remaining={unitAllocationStats[activeUnitBudgetModal]?.remaining || 0}
+          saving={unitAllocationSaving}
           unit={activeUnitBudgetModal}
         />
       )}
@@ -800,8 +828,12 @@ export default function AdminReview({
               <Button onClick={clearFilters} className={`whitespace-nowrap ${gradientButtonClass}`}>
                 Reset
               </Button>
-              <Button onClick={handleExportApprovedEntriesToCSV} className={`whitespace-nowrap ${gradientButtonClass}`}>
-                Export to CSV
+              <Button
+                onClick={handleExportApprovedEntriesToCSV}
+                disabled={csvExporting}
+                className={`whitespace-nowrap disabled:cursor-wait disabled:opacity-75 ${gradientButtonClass}`}
+              >
+                {csvExporting ? "Exporting CSV..." : "Export to CSV"}
               </Button>
             </div>
           </div>
@@ -867,7 +899,8 @@ export default function AdminReview({
                             type="button"
                             variant="ghost"
                             size="icon-sm"
-                            onClick={() => setSelectedEntry(entry)}
+                            onClick={() => !reviewActionBusy && setSelectedEntry(entry)}
+                            disabled={reviewActionBusy}
                             title="Review entry"
                             className="text-blue-600 hover:text-blue-700"
                           >
@@ -877,7 +910,8 @@ export default function AdminReview({
                             type="button"
                             variant="ghost"
                             size="icon-sm"
-                            onClick={() => setDeleteTarget(entry)}
+                            onClick={() => !deleteActionBusy && setDeleteTarget(entry)}
+                            disabled={deleteActionBusy}
                             title="Delete entry"
                             className="text-red-600 hover:text-red-700"
                           >
@@ -897,11 +931,13 @@ export default function AdminReview({
       <AdminEntryReviewModal
         entry={selectedEntry}
         actionBusy={reviewActionBusy}
+        busyAction={reviewBusyAction}
         onClose={() => setSelectedEntry(null)}
         onApprove={handleApprove}
         onReturn={handleReturn}
         onReject={handleReject}
         onGenerateApprovedEntry={handleGenerateApprovedEntry}
+        pdfExporting={pdfExportingEntryId === selectedEntry?.id}
       />
 
       <AdminDeleteEntryModal
@@ -909,6 +945,7 @@ export default function AdminReview({
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         entry={deleteTarget}
         onConfirm={handleDelete}
+        busy={deleteActionBusy}
         
       />
     </div>

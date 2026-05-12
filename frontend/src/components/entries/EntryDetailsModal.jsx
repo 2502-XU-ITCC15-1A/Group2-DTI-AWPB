@@ -1,4 +1,4 @@
-import { FileDown } from "lucide-react"
+import { FileDown, Loader2 } from "lucide-react"
 
 function formatCurrency(value) {
   return new Intl.NumberFormat("en-PH", {
@@ -48,7 +48,12 @@ function getPersonName(entry, prefix) {
 const gradientButtonClass =
   "border-0 bg-gradient-to-r from-[#1f2f74] to-[#2a4694] text-white shadow-[0_6px_16px_rgba(31,47,116,0.28)] transition-all duration-200 hover:from-[#19265f] hover:to-[#213a80] hover:shadow-[0_10px_24px_rgba(31,47,116,0.38)]"
 
-export default function EntryDetailsModal({ entry, onClose, onExportToPdf }) {
+export default function EntryDetailsModal({
+  entry,
+  isExportingPdf = false,
+  onClose,
+  onExportToPdf,
+}) {
   if (!entry) return null
 
   const isApprovedStatus =
@@ -208,10 +213,15 @@ export default function EntryDetailsModal({ entry, onClose, onExportToPdf }) {
               <button
                 type="button"
                 onClick={() => onExportToPdf?.(entry)}
-                className={`inline-flex h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium ${gradientButtonClass}`}
+                disabled={isExportingPdf}
+                className={`inline-flex h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium disabled:cursor-wait disabled:opacity-75 ${gradientButtonClass}`}
               >
-                <FileDown className="size-4" />
-                Export to PDF
+                {isExportingPdf ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <FileDown className="size-4" />
+                )}
+                {isExportingPdf ? "Exporting..." : "Export to PDF"}
               </button>
             </div>
           </div>

@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function AdminDeleteEntryModal({
+  busy = false,
   open,
   onOpenChange,
   entry,
@@ -13,7 +14,7 @@ export default function AdminDeleteEntryModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 py-4"
-      onClick={() => onOpenChange(false)}
+      onClick={() => !busy && onOpenChange(false)}
     >
       <div
         className="w-full max-w-xl overflow-hidden rounded-[1.75rem] bg-white shadow-[0_22px_70px_rgba(15,23,42,0.32)]"
@@ -31,8 +32,9 @@ export default function AdminDeleteEntryModal({
 
           <button
             type="button"
-            onClick={() => onOpenChange(false)}
-            className="rounded-xl p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+            onClick={() => !busy && onOpenChange(false)}
+            disabled={busy}
+            className="rounded-xl p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Close modal"
           >
             <X size={20} />
@@ -54,15 +56,16 @@ export default function AdminDeleteEntryModal({
         </div>
 
         <div className="flex flex-col-reverse gap-2 rounded-b-[1.75rem] border-t bg-slate-50/80 px-6 py-4 sm:flex-row sm:justify-end">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
             Cancel
           </Button>
           <Button
             type="button"
             onClick={onConfirm}
-            className="border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+            disabled={busy}
+            className="border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 disabled:cursor-wait disabled:opacity-75"
           >
-            Delete
+            {busy ? "Deleting..." : "Delete"}
           </Button>
         </div>
       </div>
