@@ -12,15 +12,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
-function formatCurrency(value) {
-  return new Intl.NumberFormat("en-PH", {
-    style: "currency",
-    currency: "PHP",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value || 0);
-}
-
 function formatDateTime(value) {
   if (!value) return "N/A";
 
@@ -70,7 +61,9 @@ function isSubmissionWindowOpen(submissionWindow) {
   return today >= start && today <= end;
 }
 
-function StatCard({ title, value, icon: Icon, highlight = false }) {
+function StatCard({ title, value, icon, highlight = false }) {
+  const IconComponent = icon;
+
   return (
     <Card
       className={
@@ -94,7 +87,7 @@ function StatCard({ title, value, icon: Icon, highlight = false }) {
           className={`rounded-2xl p-3 ${highlight ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
             }`}
         >
-          <Icon size={20} />
+          <IconComponent size={20} />
         </div>
       </CardContent>
     </Card>

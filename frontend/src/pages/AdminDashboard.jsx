@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -104,10 +104,12 @@ function getEntryBudgetTotal(entry) {
 function StatCard({
   title,
   value,
-  icon: Icon,
+  icon,
   caption,
   highlight = false,
 }) {
+  const IconComponent = icon;
+
   return (
     <Card
       className={
@@ -140,7 +142,7 @@ function StatCard({
             highlight ? "bg-white/18 text-white" : "bg-slate-100 text-slate-600"
           }`}
         >
-          <Icon size={20} />
+          <IconComponent size={20} />
         </div>
       </CardContent>
     </Card>
@@ -167,23 +169,18 @@ export default function AdminDashboard({
     return years;
   }, [currentYear, entries]);
 
-  const [selectedYear, setSelectedYear] = useState(() =>
-    availableYears.includes(currentYear) ? currentYear : availableYears[0],
-  );
-
-  useEffect(() => {
-    if (!availableYears.includes(selectedYear)) {
-      setSelectedYear(
-        availableYears.includes(currentYear) ? currentYear : availableYears[0],
-      );
-    }
-  }, [availableYears, currentYear, selectedYear]);
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const activeYear = availableYears.includes(selectedYear)
+    ? selectedYear
+    : availableYears.includes(currentYear)
+      ? currentYear
+      : availableYears[0];
 
   const yearEntries = useMemo(() => {
     return entries.filter(
-      (entry) => String(entry.planningYear || "") === String(selectedYear),
+      (entry) => String(entry.planningYear || "") === String(activeYear),
     );
-  }, [entries, selectedYear]);
+  }, [activeYear, entries]);
 
   const stats = useMemo(() => {
     return {
@@ -286,7 +283,7 @@ export default function AdminDashboard({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Select value={selectedYear} onValueChange={setSelectedYear}>
+          <Select value={activeYear} onValueChange={setSelectedYear}>
             <SelectTrigger className="w-[140px] border-0 bg-white shadow-[0_3px_10px_rgba(15,23,42,0.08)]">
               <SelectValue placeholder="Year" />
             </SelectTrigger>
@@ -432,7 +429,7 @@ export default function AdminDashboard({
           title="Total Entries"
           value={stats.total}
           icon={Layers3}
-          caption={`All submissions recorded for ${selectedYear}`}
+          caption={`All submissions recorded for ${activeYear}`}
           highlight
         />
         <StatCard
@@ -461,7 +458,7 @@ export default function AdminDashboard({
             <CardTitle className="text-lg">Budget by Unit</CardTitle>
             <p className="text-sm text-slate-500">
               Compare approved budget totals across implementing units for{" "}
-              {selectedYear}.
+              {activeYear}.
             </p>
           </CardHeader>
 
@@ -512,7 +509,7 @@ export default function AdminDashboard({
           <CardHeader className="pb-2">
             <CardTitle className="text-xl">Budget Overview</CardTitle>
             <p className="text-sm text-white/75">
-              Approved budget totals for planning year {selectedYear}.
+              Approved budget totals for planning year {activeYear}.
             </p>
           </CardHeader>
 
@@ -555,7 +552,7 @@ export default function AdminDashboard({
           <CardHeader>
             <CardTitle className="text-lg">Pending Queue</CardTitle>
             <p className="text-sm text-slate-500">
-              Entries awaiting review for {selectedYear}.
+              Entries awaiting review for {activeYear}.
             </p>
           </CardHeader>
 
