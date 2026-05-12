@@ -164,6 +164,21 @@ export const usersService = {
     return data;
   },
 
+  async updateAccount(userId, userData) {
+    const { data, error } = await supabase
+      .rpc('admin_update_user_account', {
+        p_user_id: userId,
+        p_username: userData.username,
+        p_full_name: userData.fullName,
+        p_email: userData.email,
+        p_role: userData.role,
+        p_status: userData.status || 'active',
+        p_password: userData.password || null,
+      });
+    if (error) throw error;
+    return data;
+  },
+
   async delete(userId) {
     const { error } = await supabase.auth.admin.deleteUser(userId);
     if (error) throw error;

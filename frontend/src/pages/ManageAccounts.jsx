@@ -241,22 +241,43 @@ export default function ManageAccounts({
       return;
     }
 
-    // FIX #4 (edit): save the edit to Supabase via persistAccountUpdate.
     (async () => {
-      const ok = await persistAccountUpdate(editTarget.id, {
+      const updates = {
         username: normalizedUsername,
         fullName: editForm.fullName.trim(),
         email: editForm.email.trim(),
         role: editForm.role,
-      });
+        status: editTarget.status,
+      };
 
-      if (ok) {
+      try {
+        const savedProfile = await usersService.updateAccount(editTarget.id, {
+          ...updates,
+          password: editForm.password,
+        });
+
+        const savedAccount = mapProfileToAccount(savedProfile);
+
+        setAccounts((prev) =>
+          prev.map((account) =>
+            account.id === editTarget.id ? savedAccount : account,
+          ),
+        );
+        onUpdateAccount?.(editTarget.id, savedAccount);
+
         onShowToast?.({
           title: "Account updated",
           description: `${editForm.fullName.trim()} was updated successfully.`,
           type: "success",
         });
         closeEditModal();
+      } catch (err) {
+        console.error("Failed to update account in Supabase Auth:", err);
+        onShowToast?.({
+          title: "Could not save changes",
+          description: err.message || "Please try again.",
+          type: "error",
+        });
       }
     })();
   };
