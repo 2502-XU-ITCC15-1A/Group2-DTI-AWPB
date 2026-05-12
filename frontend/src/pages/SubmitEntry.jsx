@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
@@ -336,7 +336,6 @@ export default function SubmitEntry({
     control,
     register,
     handleSubmit,
-    watch,
     trigger,
     reset,
     resetField,
@@ -355,29 +354,46 @@ export default function SubmitEntry({
   const windowOpen = isSubmissionWindowOpen(submissionWindow);
   const formLocked = !windowOpen;
 
-  const planningYear = watch("planningYear");
-  const unit = watch("unit");
-  const component = watch("component");
-  const subComponent = watch("subComponent");
-  const keyActivity = watch("keyActivity");
-  const selectedNo = watch("no");
-  const watchedSubActivity = watch("subActivity");
-  const titleOfActivities = watch("titleOfActivities");
+  const [
+    planningYear,
+    unit,
+    component,
+    subComponent,
+    keyActivity,
+    selectedNo,
+    watchedSubActivity,
+    titleOfActivities,
+  ] = useWatch({
+    control,
+    name: [
+      "planningYear",
+      "unit",
+      "component",
+      "subComponent",
+      "keyActivity",
+      "no",
+      "subActivity",
+      "titleOfActivities",
+    ],
+  });
 
   const unitCost = useWatch({
     control,
     name: "unitCost",
   });
 
-  const targets =
-    useWatch({
-      control,
-      name: "targets",
-    }) || {};
+  const watchedTargets = useWatch({
+    control,
+    name: "targets",
+  });
 
   const draftValues = useWatch({
     control,
   });
+  const hydratedFormKeyRef = useRef("");
+  const scheduleStepUpdate = useCallback((nextStep) => {
+    window.setTimeout(() => setStep(nextStep), 0);
+  }, []);
 
   const unitOptions = useMemo(() => {
     return sortTemplateKeys([...new Set((templateData?.unitOptions || []).map((item) => item.value))]);
@@ -468,6 +484,7 @@ export default function SubmitEntry({
 
   const monthlyRows = useMemo(() => {
     const parsedUnitCost = toNumber(unitCost);
+    const targets = watchedTargets || {};
 
     return MONTHS.map((month) => {
       const target = toNumber(targets[month.key]);
@@ -479,7 +496,7 @@ export default function SubmitEntry({
         amount,
       };
     });
-  }, [unitCost, targets]);
+  }, [unitCost, watchedTargets]);
 
   const activeMonthlyRows = useMemo(() => {
     return monthlyRows.filter((row) => row.target > 0);
@@ -494,7 +511,16 @@ export default function SubmitEntry({
   }, [monthlyRows]);
 
   useEffect(() => {
-    if (entryToEdit && entryToEdit.status === "Returned") {
+    const isReturnedEdit = entryToEdit && entryToEdit.status === "Returned";
+    const hasDraftValues = Boolean(draftState?.values);
+    const hydrationKey = isReturnedEdit
+      ? `edit:${entryToEdit.id}:${draftState?.mode || "none"}:${draftState?.entryId || "none"}:${hasDraftValues}`
+      : `new:${draftState?.mode || "none"}:${hasDraftValues}`;
+
+    if (hydratedFormKeyRef.current === hydrationKey) return;
+    hydratedFormKeyRef.current = hydrationKey;
+
+    if (isReturnedEdit) {
       const shouldUseEditDraft =
         draftState?.mode === "edit" && draftState?.entryId === entryToEdit.id;
 
@@ -503,19 +529,27 @@ export default function SubmitEntry({
         : buildFormValuesFromEntry(entryToEdit);
 
       reset(nextValues);
-      setStep(shouldUseEditDraft ? draftState?.step || 1 : 1);
+      scheduleStepUpdate(shouldUseEditDraft ? draftState?.step || 1 : 1);
       return;
     }
 
     if (draftState?.mode === "new" && draftState?.values) {
       reset(mergeWithDefaultFormValues(draftState.values));
-      setStep(draftState?.step || 1);
+      scheduleStepUpdate(draftState?.step || 1);
       return;
     }
 
     reset(defaultFormValues);
-    setStep(1);
-  }, [entryToEdit, reset]);
+    scheduleStepUpdate(1);
+  }, [
+    draftState?.entryId,
+    draftState?.mode,
+    draftState?.step,
+    draftState?.values,
+    entryToEdit,
+    reset,
+    scheduleStepUpdate,
+  ]);
 
   useEffect(() => {
     if (!draftValues) return;
@@ -632,16 +666,17 @@ export default function SubmitEntry({
     }
 
     if (hasNoSubActivity && subActivityOptions.length === 0) {
-  setValue("subActivity", FALLBACK_VALUE, {
-    shouldValidate: true,
-    shouldDirty: false,
-  });
-}
+      setValue("subActivity", FALLBACK_VALUE, {
+        shouldValidate: true,
+        shouldDirty: false,
+      });
+    }
   }, [
     selectedNo,
     selectedNoEntry,
     hasNoPerformanceIndicator,
     hasNoSubActivity,
+    subActivityOptions.length,
     watchedSubActivity,
     setValue,
     resetField,
@@ -800,10 +835,6 @@ export default function SubmitEntry({
     }
 
     const newEntry = {
-      id:
-        typeof crypto !== "undefined" && crypto.randomUUID
-          ? crypto.randomUUID()
-          : String(Date.now()),
       ownerId: currentUser?.id || "",
       ownerUsername: currentUser?.username || "",
       ownerFullName: currentUser?.fullName || "",

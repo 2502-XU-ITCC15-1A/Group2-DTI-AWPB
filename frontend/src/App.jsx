@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import AppLayout from "./components/layout/AppLayout";
 import initialTemplateData from "./data/awpb_dropdown_tree.json";
@@ -69,6 +69,44 @@ function App() {
     startDate: "2026-04-01",
     endDate: "2026-04-30",
   });
+
+  const dismissToast = useCallback((toastId) => {
+    setToast((current) => {
+      if (!current || current.id !== toastId || current.exiting) return current;
+      return { ...current, exiting: true };
+    });
+    window.clearTimeout(toastDismissRef.current);
+    toastDismissRef.current = window.setTimeout(() => {
+      setToast((current) => (current?.id === toastId ? null : current));
+    }, 220);
+  }, []);
+
+  const showToast = useCallback(({
+    title,
+    description = "",
+    type = "info",
+  }) => {
+    const id = Date.now();
+    setToast({ id, title, description, type, exiting: false });
+    window.clearTimeout(toastTimeoutRef.current);
+    window.clearTimeout(toastDismissRef.current);
+    toastTimeoutRef.current = window.setTimeout(() => {
+      dismissToast(id);
+    }, 2600);
+  }, [dismissToast]);
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await authService.signOut();
+    } catch (err) {
+      console.error("Sign out error:", err);
+    }
+    setAuthUser(null);
+    setActiveView(null);
+    window.localStorage.removeItem(ADMIN_VIEW_STORAGE_KEY);
+    setEntryBeingEdited(null);
+    setSubmitEntryDraft(null);
+  }, []);
 
   useEffect(() => {
     if (authLoading || !authUserId || isRecoveryMode) return;
@@ -171,13 +209,13 @@ async function loadTemplate() {
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [isRecoveryMode]);
 
   useEffect(() => {
-    if (!authUser?.id) return;
+    if (!authUserId) return;
 
     const subscription = realtimeService.subscribeToProfiles(async (payload) => {
-      if (payload.new?.id !== authUser.id) return;
+      if (payload.new?.id !== authUserId) return;
 
       if (payload.new.status !== "active") {
         await handleLogout();
@@ -204,7 +242,7 @@ async function loadTemplate() {
     });
 
     return () => subscription.unsubscribe();
-  }, [authUser?.id]);
+  }, [authUserId, handleLogout, showToast]);
 
   useEffect(() => {
     if (!authUserId) return;
@@ -296,7 +334,7 @@ async function loadTemplate() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, authUserId, authUserRole, isRecoveryMode]);
+  }, [authLoading, authUserId, authUserRole, isRecoveryMode, showToast]);
 
   useEffect(() => {
     if (!authUserId) return;
@@ -458,25 +496,6 @@ async function loadTemplate() {
     );
   };
 
-  const showToast = ({ title, description = "", type = "info" }) => {
-    const id = Date.now();
-    setToast({ id, title, description, type, exiting: false });
-    window.clearTimeout(toastTimeoutRef.current);
-    window.clearTimeout(toastDismissRef.current);
-    toastTimeoutRef.current = window.setTimeout(() => { dismissToast(id); }, 2600);
-  };
-
-  const dismissToast = (toastId) => {
-    setToast((current) => {
-      if (!current || current.id !== toastId || current.exiting) return current;
-      return { ...current, exiting: true };
-    });
-    window.clearTimeout(toastDismissRef.current);
-    toastDismissRef.current = window.setTimeout(() => {
-      setToast((current) => (current?.id === toastId ? null : current));
-    }, 220);
-  };
-
   const handleLogin = (user) => {
     if (user.role === "admin") {
       setActiveView(null);
@@ -485,19 +504,6 @@ async function loadTemplate() {
       setActiveView("encoder");
     }
     setAuthUser(user);
-  };
-
-  const handleLogout = async () => {
-    try {
-      await authService.signOut();
-    } catch (err) {
-      console.error("Sign out error:", err);
-    }
-    setAuthUser(null);
-    setActiveView(null);
-    window.localStorage.removeItem(ADMIN_VIEW_STORAGE_KEY);
-    setEntryBeingEdited(null);
-    setSubmitEntryDraft(null);
   };
 
   const handleChooseView = (view) => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, Eye, Trash2, History, Pencil } from "lucide-react";
 import { generateApprovedEntryPdf } from "../services/pdfService";
 import { csvExportService } from "../services/csvService";
@@ -446,7 +446,7 @@ export default function AdminReview({
     }
   };
   //connects sa supabase
-  const loadBudgetData = async () => {
+  const loadBudgetData = useCallback(async () => {
     try {
       let {data: txData, error: txError} = await supabase
         .from("budget_transactions")
@@ -520,7 +520,7 @@ export default function AdminReview({
     } catch (err) {
       console.error("Failed to load allocation transactions:", err);
     }
-  };
+  }, [UNITS]);
   const closeUnitAllocationModal = () => {
     setActiveUnitBudgetModal(null);
     setUnitBudgetAmount("");
@@ -579,7 +579,7 @@ export default function AdminReview({
 
       useEffect(() => {
         loadBudgetData();
-      }, []);
+      }, [loadBudgetData]);
 
   return (
     <div className="space-y-6">
