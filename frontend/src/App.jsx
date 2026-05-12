@@ -53,6 +53,17 @@ function App() {
   const [accounts, setAccounts] = useState(INITIAL_ACCOUNTS);
   const [templateData, setTemplateData] = useState({ hierarchy: {} });
   const [dataLoading, setDataLoading] = useState(false);
+  const [authUser, setAuthUser] = useState(null);
+  const [activeView, setActiveView] = useState(getStoredAdminView);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [isRecoveryMode, setIsRecoveryMode] = useState(
+    () => window.location.pathname === '/confirm-password'
+  );
+  const [toast, setToast] = useState(null);
+  const toastTimeoutRef = useRef(null);
+  const toastDismissRef = useRef(null);
+  const authUserId = authUser?.id;
+  const authUserRole = authUser?.role;
 
   const [submissionWindow, setSubmissionWindow] = useState({
     startDate: "2026-04-01",
@@ -60,8 +71,9 @@ function App() {
   });
 
   useEffect(() => {
-  loadTemplate();
-}, []);
+    if (authLoading || !authUser || isRecoveryMode) return;
+    loadTemplate();
+  }, [authLoading, authUser, isRecoveryMode]);
 
 async function loadTemplate() {
   const { data, error } = await getTemplateHierarchy();
@@ -106,18 +118,6 @@ async function loadTemplate() {
 
   setTemplateData({ hierarchy });
 }
-
-  const [authUser, setAuthUser] = useState(null);
-  const [activeView, setActiveView] = useState(getStoredAdminView);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [isRecoveryMode, setIsRecoveryMode] = useState(
-    () => window.location.pathname === '/confirm-password'
-  );
-  const [toast, setToast] = useState(null);
-  const toastTimeoutRef = useRef(null);
-  const toastDismissRef = useRef(null);
-  const authUserId = authUser?.id;
-  const authUserRole = authUser?.role;
 
   // Restore session on page load / listen for auth changes
   useEffect(() => {
@@ -219,6 +219,8 @@ async function loadTemplate() {
   }, [authUserId, authUserRole]);
 
   useEffect(() => {
+    if (authLoading || !authUser || isRecoveryMode) return;
+
     let cancelled = false;
 
     const loadSubmissionWindow = async () => {
@@ -243,7 +245,7 @@ async function loadTemplate() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authLoading, authUser, isRecoveryMode]);
 
   useEffect(() => {
     if (authLoading || !authUser || isRecoveryMode) return;
