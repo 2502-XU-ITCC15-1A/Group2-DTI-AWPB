@@ -294,10 +294,12 @@ export default function SubmitEntry({
   onDraftChange,
   onClearDraft,
   currentUser,
+  onShowToast,
   templateData: templateDataProp,
 }) {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
+  const [targetValidationMessage, setTargetValidationMessage] = useState("");
 
   // -------------------------------------------------------------------------
   // Load dropdown data from Supabase. Uses the JSON prop as an initial
@@ -502,6 +504,8 @@ export default function SubmitEntry({
     return monthlyRows.filter((row) => row.target > 0);
   }, [monthlyRows]);
 
+  const hasMonthlyTarget = activeMonthlyRows.length > 0;
+
   const grandTotal = useMemo(() => {
     return monthlyRows.reduce((sum, row) => sum + row.amount, 0);
   }, [monthlyRows]);
@@ -700,13 +704,18 @@ export default function SubmitEntry({
 
     const isValid = await trigger(["unitCost", ...targetFieldNames]);
 
-    const hasAtLeastOneTarget = monthlyRows.some((row) => row.target > 0);
-
-    if (!hasAtLeastOneTarget) {
-      alert("Please enter at least one monthly target before continuing.");
+    if (!hasMonthlyTarget) {
+      const message = "Please enter at least one monthly target before continuing.";
+      setTargetValidationMessage(message);
+      onShowToast?.({
+        title: "Monthly target required",
+        description: message,
+        type: "error",
+      });
       return false;
     }
 
+    setTargetValidationMessage("");
     return isValid;
   };
 
@@ -769,16 +778,23 @@ export default function SubmitEntry({
 
   const onSubmit = (data) => {
     if (!windowOpen) {
-      alert(
-        "The encoding period is closed. You cannot submit or resubmit entries right now.",
-      );
+      onShowToast?.({
+        title: "Encoding period closed",
+        description:
+          "You cannot submit or resubmit entries while the encoding period is closed.",
+        type: "error",
+      });
       return;
     }
 
-    const hasAtLeastOneTarget = monthlyRows.some((row) => row.target > 0);
-
-    if (!hasAtLeastOneTarget) {
-      alert("Please enter at least one monthly target before submitting.");
+    if (!hasMonthlyTarget) {
+      const message = "Please enter at least one monthly target before submitting.";
+      setTargetValidationMessage(message);
+      onShowToast?.({
+        title: "Monthly target required",
+        description: message,
+        type: "error",
+      });
       setStep(2);
       return;
     }
@@ -1327,6 +1343,16 @@ export default function SubmitEntry({
                 )}
               </div>
 
+              {targetValidationMessage && (
+                <div
+                  role="alert"
+                  className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+                >
+                  <p className="font-medium">Monthly target required</p>
+                  <p className="mt-1">{targetValidationMessage}</p>
+                </div>
+              )}
+
               <div className="overflow-x-auto rounded-xl border">
                 <table className="w-full min-w-[700px] text-sm">
                   <thead className="bg-gray-100">
@@ -1356,6 +1382,11 @@ export default function SubmitEntry({
                             {...register(`targets.${row.key}`, {
                               setValueAs: (value) =>
                                 value === "" ? "" : Number(value),
+                              onChange: () => {
+                                if (targetValidationMessage) {
+                                  setTargetValidationMessage("");
+                                }
+                              },
                               min: {
                                 value: 0,
                                 message: "Target cannot be negative",
