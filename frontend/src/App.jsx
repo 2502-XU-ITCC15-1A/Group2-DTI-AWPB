@@ -133,6 +133,10 @@ async function loadTemplate() {
         const user = await authService.getCurrentUser();
         if (user && !cancelled) {
           const profile = await authService.getProfile(user.id);
+          if (profile.status !== "active") {
+            await authService.signOut();
+            return;
+          }
           setAuthUser({
             id: user.id,
             username: profile.username,
@@ -168,6 +172,39 @@ async function loadTemplate() {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!authUser?.id) return;
+
+    const subscription = realtimeService.subscribeToProfiles(async (payload) => {
+      if (payload.new?.id !== authUser.id) return;
+
+      if (payload.new.status !== "active") {
+        await handleLogout();
+        showToast({
+          title: "Account deactivated",
+          description: "Your session has been signed out.",
+          type: "error",
+        });
+        return;
+      }
+
+      setAuthUser((current) =>
+        current?.id === payload.new.id
+          ? {
+              ...current,
+              username: payload.new.username,
+              email: payload.new.email,
+              fullName: payload.new.full_name,
+              role: payload.new.role,
+              status: payload.new.status,
+            }
+          : current,
+      );
+    });
+
+    return () => subscription.unsubscribe();
+  }, [authUser?.id]);
 
   useEffect(() => {
     if (!authUserId) return;

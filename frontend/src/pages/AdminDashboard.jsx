@@ -78,6 +78,29 @@ function isSubmissionWindowOpen(submissionWindow) {
   return today >= start && today <= end;
 }
 
+function isApprovedStatus(status) {
+  return String(status || "").trim().toLowerCase() === "approved";
+}
+
+function normalizeMonthLabel(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return MONTHS.find(
+    (month) =>
+      month.label.toLowerCase() === normalized ||
+      month.key.toLowerCase() === normalized ||
+      month.key.toLowerCase() === normalized.slice(0, 3),
+  )?.label;
+}
+
+function getEntryBudgetTotal(entry) {
+  const monthlyTotal = (entry.monthlyBreakdown || []).reduce(
+    (sum, item) => sum + Number(item.amount || 0),
+    0,
+  );
+
+  return monthlyTotal || Number(entry.grandTotal || 0);
+}
+
 function StatCard({
   title,
   value,
@@ -171,21 +194,14 @@ export default function AdminDashboard({
         .length,
       rejected: yearEntries.filter((entry) => entry.status === "Rejected")
         .length,
-      approved: yearEntries.filter((entry) => entry.status === "Approved")
+      approved: yearEntries.filter((entry) => isApprovedStatus(entry.status))
         .length,
     };
   }, [yearEntries]);
 
   const approvedEntries = useMemo(() => {
-    return yearEntries.filter((entry) => entry.status === "Approved");
+    return yearEntries.filter((entry) => isApprovedStatus(entry.status));
   }, [yearEntries]);
-
-  const approvedBudget = useMemo(() => {
-    return approvedEntries.reduce(
-      (sum, entry) => sum + Number(entry.grandTotal || 0),
-      0,
-    );
-  }, [approvedEntries]);
 
   const approvedMonthlyBudget = useMemo(() => {
     const totals = MONTHS.map((month) => ({
@@ -195,7 +211,8 @@ export default function AdminDashboard({
 
     approvedEntries.forEach((entry) => {
       entry.monthlyBreakdown?.forEach((item) => {
-        const monthIndex = MONTHS.findIndex((month) => month.label === item.month);
+        const monthLabel = normalizeMonthLabel(item.month);
+        const monthIndex = MONTHS.findIndex((month) => month.label === monthLabel);
         if (monthIndex >= 0) {
           totals[monthIndex].amount += Number(item.amount || 0);
         }
@@ -204,6 +221,13 @@ export default function AdminDashboard({
 
     return totals;
   }, [approvedEntries]);
+
+  const approvedBudget = useMemo(() => {
+    return approvedMonthlyBudget.reduce(
+      (sum, month) => sum + Number(month.amount || 0),
+      0,
+    );
+  }, [approvedMonthlyBudget]);
 
   const unitBudget = useMemo(() => {
     const totalsByUnit = DEFAULT_UNITS.reduce((acc, unit) => {
@@ -226,7 +250,7 @@ export default function AdminDashboard({
         };
       }
 
-      totalsByUnit[unitKey].amount += Number(entry.grandTotal || 0);
+      totalsByUnit[unitKey].amount += getEntryBudgetTotal(entry);
       totalsByUnit[unitKey].entries += 1;
     });
 

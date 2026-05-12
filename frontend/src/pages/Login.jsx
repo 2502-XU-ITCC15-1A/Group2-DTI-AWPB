@@ -53,6 +53,12 @@ export default function Login({ onLogin }) {
             
             // Get user profile to get role
             const profile = await authService.getProfile(user.id)
+
+            if (profile.status !== "active") {
+                await authService.signOut()
+                setError("This account has been deactivated. Please contact an administrator.")
+                return
+            }
             
             onLogin({
                 id: user.id,

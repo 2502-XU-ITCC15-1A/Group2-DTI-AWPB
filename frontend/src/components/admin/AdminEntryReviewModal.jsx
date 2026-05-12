@@ -47,6 +47,7 @@ function getPersonName(entry, prefix) {
 }
 
 export default function AdminEntryReviewModal({
+  actionBusy = false,
   entry,
   onClose,
   onApprove,
@@ -59,6 +60,7 @@ export default function AdminEntryReviewModal({
   return (
     <AdminEntryReviewModalContent
       key={entry.id}
+      actionBusy={actionBusy}
       entry={entry}
       onApprove={onApprove}
       onClose={onClose}
@@ -70,6 +72,7 @@ export default function AdminEntryReviewModal({
 }
 
 function AdminEntryReviewModalContent({
+  actionBusy,
   entry,
   onClose,
   onApprove,
@@ -277,6 +280,7 @@ function AdminEntryReviewModalContent({
             <button
               type="button"
               onClick={handleReturn}
+              disabled={actionBusy}
               className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
             >
               Return for Revision
@@ -285,18 +289,22 @@ function AdminEntryReviewModalContent({
             <button
               type="button"
               onClick={handleReject}
+              disabled={actionBusy}
               className="rounded-lg border border-gray-300 bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
             >
               Reject
             </button>
 
-            <button
-              type="button"
-              onClick={handleApprove}
-              className="rounded-lg border border-green-200 bg-green-100 px-4 py-2 text-sm font-medium text-green-800 transition hover:bg-green-200"
-            >
-              Approve
-            </button>
+            {!isApprovedStatus && (
+              <button
+                type="button"
+                onClick={handleApprove}
+                disabled={actionBusy}
+                className="rounded-lg border border-green-200 bg-green-100 px-4 py-2 text-sm font-medium text-green-800 transition hover:bg-green-200 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {actionBusy ? "Approving..." : "Approve"}
+              </button>
+            )}
           </div>
         </div>
       </div>

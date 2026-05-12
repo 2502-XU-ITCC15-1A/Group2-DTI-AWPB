@@ -98,6 +98,7 @@ export default function AdminReview({
   const [unitBudgetAmount, setUnitBudgetAmount] = useState("");
   const [unitBudgetDesc, setUnitBudgetDesc] = useState("");
   const [unitBudgetAdjustmentType, setUnitBudgetAdjustmentType] = useState("ADDED");
+  const [reviewActionBusy, setReviewActionBusy] = useState(false);
 
   const entries = entriesProp;
   const currentAdminId = currentUser?.id || null;
@@ -212,67 +213,143 @@ export default function AdminReview({
     const payload = {
       ...transaction,
       actor_id: currentAdminId,
+      actor_name: currentUser?.fullName || currentUser?.username || "",
     };
 
-    let { error } = await supabase.from("budget_transactions").insert(payload);
-    if (error?.message?.includes("actor_id") || error?.code === "PGRST204") {
-      const fallbackPayload = { ...payload };
-      delete fallbackPayload.actor_id;
-      const fallback = await supabase.from("budget_transactions").insert(fallbackPayload);
-      error = fallback.error;
+    const insertPayload = async (nextPayload) =>
+      supabase.from("budget_transactions").insert(nextPayload);
+
+    const shouldTryLegacyPayload = (error) => {
+      if (!error) return false;
+      const message = error.message || "";
+      return (
+        error.code === "PGRST204" ||
+        message.includes("actor_id") ||
+        message.includes("actor_name") ||
+        message.includes("entry_id") ||
+        message.includes("schema cache")
+      );
+    };
+
+    const payloadAttempts = [
+      payload,
+      (() => {
+        const next = { ...payload };
+        delete next.entry_id;
+        return next;
+      })(),
+      (() => {
+        const next = { ...payload };
+        delete next.actor_name;
+        delete next.entry_id;
+        return next;
+      })(),
+      (() => {
+        const next = { ...payload };
+        delete next.actor_id;
+        delete next.entry_id;
+        return next;
+      })(),
+      (() => {
+        const next = { ...payload };
+        delete next.actor_id;
+        delete next.actor_name;
+        delete next.entry_id;
+        return next;
+      })(),
+    ];
+
+    let error = null;
+    for (const nextPayload of payloadAttempts) {
+      const result = await insertPayload(nextPayload);
+      error = result.error;
+      if (!error) return;
+      if (!shouldTryLegacyPayload(error)) break;
     }
+
     if (error) throw error;
   };
 
   const handleApprove = async (note) => {
-  if (!selectedEntry) return;
-  const entryAmount = selectedEntry.grandTotal || 0;
-  const entryTitle = selectedEntry.titleOfActivities;
-  const entryUnit = normalizeUnitCode(selectedEntry.unit);
+    if (!selectedEntry || reviewActionBusy) return;
+    if (isApprovedStatus(selectedEntry.status)) {
+      onShowToast?.({
+        title: "Already approved",
+        description:
+          "This entry has already been approved, so no additional allocation was deducted.",
+        type: "info",
+      });
+      return;
+    }
 
-  const unitBudget = unitBudgets[entryUnit] || 0;
-  if (entryAmount > unitBudget) {
-    onShowToast?.({
-      title: "Insufficient allocation",
-      description: `Need ₱${entryAmount.toLocaleString()} but ${entryUnit} only has ₱${unitBudget.toLocaleString()} remaining. Edit the unit allocation first.`,
-      type: "error",
-    });
-    return;
-  }
-  
-  try {
-    await insertBudgetTransaction({
-      amount: entryAmount,
-      type: 'DEDUCTED',
-      description: `Approved: ${entryTitle}`,
-      unit: entryUnit,
-    });
-    
-    await persistEntryUpdate(
-      selectedEntry.id,
-      {
-        status: "Approved",
-        adminComment: note || "",
-        reviewedAt: new Date().toISOString(),
-      },
-      {
-        title: "Entry approved",
-        description: `${entryTitle} was approved successfully. ₱${entryAmount.toLocaleString()} deducted from ${entryUnit}'s remaining allocation.`,
-        type: "success",
+    setReviewActionBusy(true);
+    const entryAmount = selectedEntry.grandTotal || 0;
+    const entryTitle = selectedEntry.titleOfActivities;
+    const entryUnit = normalizeUnitCode(selectedEntry.unit);
+
+    const unitBudget = unitBudgets[entryUnit] || 0;
+    if (entryAmount > unitBudget) {
+      onShowToast?.({
+        title: "Insufficient allocation",
+        description: `Need ₱${entryAmount.toLocaleString()} but ${entryUnit} only has ₱${unitBudget.toLocaleString()} remaining. Edit the unit allocation first.`,
+        type: "error",
+      });
+      setReviewActionBusy(false);
+      return;
+    }
+
+    try {
+      const latestEntry = await entriesService.getById(selectedEntry.id);
+      if (isApprovedStatus(latestEntry.status)) {
+        onShowToast?.({
+          title: "Already approved",
+          description:
+            "This entry was already approved. Allocation was not deducted again.",
+          type: "info",
+        });
+        setSelectedEntry(null);
+        return;
       }
-    );
-    
-    await loadBudgetData();
-    
-  } catch (err) {
-    console.error("Failed to approve entry:", err);
-    onShowToast?.({
-      title: "Could not approve entry",
-      description: err.message || "Please try again.",
-      type: "error",
-    });
-  }
-};
+
+      await insertBudgetTransaction({
+        amount: entryAmount,
+        type: "DEDUCTED",
+        description: `Approved: ${entryTitle}`,
+        unit: entryUnit,
+        entry_id: selectedEntry.id,
+      });
+
+      await persistEntryUpdate(
+        selectedEntry.id,
+        {
+          status: "Approved",
+          adminComment: note || "",
+          reviewedAt: new Date().toISOString(),
+        },
+        {
+          title: "Entry approved",
+          description: `${entryTitle} was approved successfully. ₱${entryAmount.toLocaleString()} deducted from ${entryUnit}'s remaining allocation.`,
+          type: "success",
+        },
+      );
+
+      await loadBudgetData();
+    } catch (err) {
+      console.error("Failed to approve entry:", err);
+      const isDuplicateApproval =
+        err.code === "23505" ||
+        err.message?.includes("idx_budget_transactions_single_approval_deduction");
+      onShowToast?.({
+        title: isDuplicateApproval ? "Already approved" : "Could not approve entry",
+        description: isDuplicateApproval
+          ? "This entry already has an approval deduction. Allocation was not deducted again."
+          : err.message || "Please try again.",
+        type: isDuplicateApproval ? "info" : "error",
+      });
+    } finally {
+      setReviewActionBusy(false);
+    }
+  };
 
   const handleGenerateApprovedEntry = async (entry) => {
     if (!isApprovedStatus(entry.status)) return;
@@ -310,94 +387,126 @@ export default function AdminReview({
     }
   };
   
-const reverseBudgetDeduction = async (entryTitle, amount, oldStatus, newStatus, entryUnit) => {
-  try {
-    await insertBudgetTransaction({
-      amount: amount,
-      type: 'ADDED',
-      description: `REVERSAL: "${entryTitle}" changed from ${oldStatus} → ${newStatus}`,
-      unit: normalizeUnitCode(entryUnit) || null,
-    });
-    
-    onShowToast?.({
-      title: "Allocation restored",
-      description: `₱${amount.toLocaleString()} was added back to the allocation for: ${entryTitle}`,
-      type: "success",
-    });
-    
-    return true;
-  } catch (err) {
-    console.error("Failed to reverse allocation deduction:", err);
-    onShowToast?.({
-      title: "Could not restore allocation",
-      description: err.message || "Please check the transaction history.",
-      type: "error",
-    });
-    return false;
-  }
-};
+  const reverseBudgetDeduction = async (
+    entryTitle,
+    amount,
+    oldStatus,
+    newStatus,
+    entryUnit,
+  ) => {
+    try {
+      await insertBudgetTransaction({
+        amount: amount,
+        type: "ADDED",
+        description: `REVERSAL: "${entryTitle}" changed from ${oldStatus} → ${newStatus}`,
+        unit: normalizeUnitCode(entryUnit) || null,
+      });
+
+      onShowToast?.({
+        title: "Allocation restored",
+        description: `₱${amount.toLocaleString()} was added back to the allocation for: ${entryTitle}`,
+        type: "success",
+      });
+
+      return true;
+    } catch (err) {
+      console.error("Failed to reverse allocation deduction:", err);
+      onShowToast?.({
+        title: "Could not restore allocation",
+        description: err.message || "Please check the transaction history.",
+        type: "error",
+      });
+      return false;
+    }
+  };
 
   const handleReturn = async (note) => {
-  if (!selectedEntry) return;
-  const entryTitle = selectedEntry.titleOfActivities;
-  const oldStatus = selectedEntry.status;
-  const newStatus = "Returned";
-  const entryAmount = selectedEntry.grandTotal || 0;
+    if (!selectedEntry || reviewActionBusy) return;
+    setReviewActionBusy(true);
+    const entryTitle = selectedEntry.titleOfActivities;
+    const oldStatus = selectedEntry.status;
+    const newStatus = "Returned";
+    const entryAmount = selectedEntry.grandTotal || 0;
 
-  // Check if it was approved and reverse allocation deduction if needed
-  if (isApprovedStatus(oldStatus)) {
-    console.log(`Entry was ${oldStatus}, reversing allocation deduction of ₱${entryAmount.toLocaleString()}`);
-    const reversed = await reverseBudgetDeduction(entryTitle, entryAmount, oldStatus, newStatus, selectedEntry.unit);
-    if (!reversed) {
-      return; // Stop if reversal failed
-    }
-  }
+    try {
+      // Check if it was approved and reverse allocation deduction if needed
+      if (isApprovedStatus(oldStatus)) {
+        console.log(
+          `Entry was ${oldStatus}, reversing allocation deduction of ₱${entryAmount.toLocaleString()}`,
+        );
+        const reversed = await reverseBudgetDeduction(
+          entryTitle,
+          entryAmount,
+          oldStatus,
+          newStatus,
+          selectedEntry.unit,
+        );
+        if (!reversed) {
+          return; // Stop if reversal failed
+        }
+      }
 
-  // Update the entry status (this runs for ALL returns, not just approved ones)
-  await persistEntryUpdate(
-    selectedEntry.id,
-    {
-      status: newStatus,
-      adminComment: note,
-      reviewedAt: new Date().toISOString(),
-    },
-    {
-      title: "Entry returned",
-      description: `${entryTitle} was returned for revision.${isApprovedStatus(oldStatus) ? ` ₱${entryAmount.toLocaleString()} restored to allocation.` : ""}`,
-      type: "success",
+      // Update the entry status (this runs for ALL returns, not just approved ones)
+      await persistEntryUpdate(
+        selectedEntry.id,
+        {
+          status: newStatus,
+          adminComment: note,
+          reviewedAt: new Date().toISOString(),
+        },
+        {
+          title: "Entry returned",
+          description: `${entryTitle} was returned for revision.${isApprovedStatus(oldStatus) ? ` ₱${entryAmount.toLocaleString()} restored to allocation.` : ""}`,
+          type: "success",
+        },
+      );
+
+      await loadBudgetData();
+    } finally {
+      setReviewActionBusy(false);
     }
-  );
-  
-  await loadBudgetData();
-};
+  };
 
   const handleReject = async (note) => {
-    if (!selectedEntry) return;
+    if (!selectedEntry || reviewActionBusy) return;
+    setReviewActionBusy(true);
     const entryTitle = selectedEntry.titleOfActivities;
-     const oldStatus = selectedEntry.status;
-      const newStatus = "Rejected";
-      const entryAmount = selectedEntry.grandTotal || 0;
+    const oldStatus = selectedEntry.status;
+    const newStatus = "Rejected";
+    const entryAmount = selectedEntry.grandTotal || 0;
 
-      if(isApprovedStatus(oldStatus)) {
-         console.log(`Entry was ${oldStatus}, reversing allocation deduction of ₱${entryAmount.toLocaleString()}`);
-    const reversed = await reverseBudgetDeduction(entryTitle, entryAmount, oldStatus, newStatus, selectedEntry.unit);
-    if (!reversed) return;
-  }
-
-  await persistEntryUpdate(
-      selectedEntry.id,
-      {
-        status: newStatus,
-        adminComment: note,
-        reviewedAt: new Date().toISOString(),
-      },
-      {
-        title: "Entry rejected",
-        description: `${entryTitle} was rejected.${isApprovedStatus(oldStatus) ? ` ₱${entryAmount.toLocaleString()} restored to allocation.` : ""}`,
-      type: "success",
+    try {
+      if (isApprovedStatus(oldStatus)) {
+        console.log(
+          `Entry was ${oldStatus}, reversing allocation deduction of ₱${entryAmount.toLocaleString()}`,
+        );
+        const reversed = await reverseBudgetDeduction(
+          entryTitle,
+          entryAmount,
+          oldStatus,
+          newStatus,
+          selectedEntry.unit,
+        );
+        if (!reversed) return;
       }
-    );
-    await loadBudgetData();
+
+      await persistEntryUpdate(
+        selectedEntry.id,
+        {
+          status: newStatus,
+          adminComment: note,
+          reviewedAt: new Date().toISOString(),
+        },
+        {
+          title: "Entry rejected",
+          description: `${entryTitle} was rejected.${isApprovedStatus(oldStatus) ? ` ₱${entryAmount.toLocaleString()} restored to allocation.` : ""}`,
+          type: "success",
+        },
+      );
+      await loadBudgetData();
+    } finally {
+      setReviewActionBusy(false);
+    }
   };
     
 
@@ -471,6 +580,31 @@ const reverseBudgetDeduction = async (entryTitle, amount, oldStatus, newStatus, 
       }
 
       if (txError) throw txError;
+
+      const actorIds = [
+        ...new Set(
+          (txData || [])
+            .filter((tx) => tx.actor_id && !tx.actor)
+            .map((tx) => tx.actor_id),
+        ),
+      ];
+
+      if (actorIds.length > 0) {
+        const { data: actorProfiles, error: actorError } = await supabase
+          .from("profiles")
+          .select("id, username, full_name")
+          .in("id", actorIds);
+
+        if (!actorError) {
+          const actorsById = Object.fromEntries(
+            (actorProfiles || []).map((profile) => [profile.id, profile]),
+          );
+          txData = (txData || []).map((tx) => ({
+            ...tx,
+            actor: tx.actor || actorsById[tx.actor_id] || null,
+          }));
+        }
+      }
 
         // All unit transactions for the general View Records
         const allUnitTx = (txData || [])
@@ -879,6 +1013,7 @@ const reverseBudgetDeduction = async (entryTitle, amount, oldStatus, newStatus, 
 
       <AdminEntryReviewModal
         entry={selectedEntry}
+        actionBusy={reviewActionBusy}
         onClose={() => setSelectedEntry(null)}
         onApprove={handleApprove}
         onReturn={handleReturn}

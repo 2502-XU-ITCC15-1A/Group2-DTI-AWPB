@@ -34,7 +34,7 @@ function getEntryPersonName(entry, prefix) {
 }
 
 function getTransactionActorName(tx) {
-  return tx.actor?.full_name || tx.actor?.username || "N/A";
+  return tx.actor?.full_name || tx.actor?.username || tx.actor_name || "N/A";
 }
 
 export default function AdminBudgetRecordsModal({
