@@ -107,7 +107,7 @@ export default function AdminBudgetRecordsModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4 py-6">
-      <div className="flex max-h-[88vh] w-full max-w-[1180px] flex-col overflow-hidden rounded-[1.75rem]git  bg-[#edf4f3] shadow-[0_24px_70px_rgba(15,23,42,0.35)]">
+      <div className="flex max-h-[88vh] w-full max-w-[1180px] flex-col overflow-hidden rounded-[1.75rem] bg-[#edf4f3] shadow-[0_24px_70px_rgba(15,23,42,0.35)]">
         <div className="flex items-start justify-between gap-4 bg-gradient-to-br from-[#6ea3a6] via-[#4f8f93] to-[#2f7f86] px-6 py-5 text-white">
           <div className="flex items-center gap-3">
             <div className="rounded-2xl bg-white/18 p-3">
