@@ -310,7 +310,7 @@ export default function AdminReview({
     }
   };
   
-const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, newStatus, entryUnit) => {
+const reverseBudgetDeduction = async (entryTitle, amount, oldStatus, newStatus, entryUnit) => {
   try {
     await insertBudgetTransaction({
       amount: amount,
@@ -347,7 +347,7 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
   // Check if it was approved and reverse allocation deduction if needed
   if (isApprovedStatus(oldStatus)) {
     console.log(`Entry was ${oldStatus}, reversing allocation deduction of ₱${entryAmount.toLocaleString()}`);
-    const reversed = await reverseBudgetDeduction(selectedEntry.id, entryTitle, entryAmount, oldStatus, newStatus, selectedEntry.unit);
+    const reversed = await reverseBudgetDeduction(entryTitle, entryAmount, oldStatus, newStatus, selectedEntry.unit);
     if (!reversed) {
       return; // Stop if reversal failed
     }
@@ -380,7 +380,7 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
 
       if(isApprovedStatus(oldStatus)) {
          console.log(`Entry was ${oldStatus}, reversing allocation deduction of ₱${entryAmount.toLocaleString()}`);
-    const reversed = await reverseBudgetDeduction(selectedEntry.id, entryTitle, entryAmount, oldStatus, newStatus, selectedEntry.unit);
+    const reversed = await reverseBudgetDeduction(entryTitle, entryAmount, oldStatus, newStatus, selectedEntry.unit);
     if (!reversed) return;
   }
 
@@ -411,13 +411,33 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
   const handleDelete = async () => {
     if (!deleteTarget) return;
     const entryTitle = deleteTarget.titleOfActivities;
+    const entryAmount = Number(deleteTarget.grandTotal || 0);
+    const entryStatus = deleteTarget.status;
+    const entryUnit = normalizeUnitCode(deleteTarget.unit);
+    const shouldRestoreAllocation = isApprovedStatus(entryStatus) && entryAmount > 0;
 
     try {
+      if (shouldRestoreAllocation) {
+        const reversed = await reverseBudgetDeduction(
+          entryTitle,
+          entryAmount,
+          entryStatus,
+          "Deleted",
+          entryUnit,
+        );
+        if (!reversed) return;
+      }
+
       await entriesService.delete(deleteTarget.id);
       onDeleteEntry?.(deleteTarget.id);
+      await loadBudgetData();
       onShowToast?.({
         title: "Entry deleted",
-        description: `${entryTitle} was removed successfully.`,
+        description: `${entryTitle} was removed successfully.${
+          shouldRestoreAllocation
+            ? ` ₱${entryAmount.toLocaleString()} was restored to ${entryUnit}'s allocation.`
+            : ""
+        }`,
         type: "success",
       });
       if (selectedEntry?.id === deleteTarget.id) {
