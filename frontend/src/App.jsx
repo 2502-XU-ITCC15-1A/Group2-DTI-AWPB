@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import AppLayout from "./components/layout/AppLayout";
 import initialTemplateData from "./data/awpb_dropdown_tree.json";
 
@@ -8,6 +8,7 @@ import { getTemplateHierarchy } from "./services/templateService";
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import ConfirmPassword from "./pages/ConfirmPassword";
+import ChooseView from "./pages/ChooseView";
 import Home from "./pages/Home";
 import MyEntries from "./pages/MyEntries";
 import SubmitEntry from "./pages/SubmitEntry";
@@ -26,12 +27,26 @@ import {
 } from "./services/supabaseService";
 
 const INITIAL_ACCOUNTS = [];
+const ADMIN_VIEW_STORAGE_KEY = "awpb_admin_active_view";
+
+function getStoredAdminView() {
+  const storedView = window.localStorage.getItem(ADMIN_VIEW_STORAGE_KEY);
+  return storedView === "admin" || storedView === "encoder" ? storedView : null;
+}
+
+function getDefaultAuthenticatedPath(role, activeView) {
+  if (role !== "admin") return "/";
+  if (activeView === "admin") return "/admin/dashboard";
+  if (activeView === "encoder") return "/";
+  return "/choose-view";
+}
 
 function createInitialTemplateState() {
   return JSON.parse(JSON.stringify(initialTemplateData));
 }
 
 function App() {
+  const navigate = useNavigate();
   const [entries, setEntries] = useState([]);
   const [entryBeingEdited, setEntryBeingEdited] = useState(null);
   const [submitEntryDraft, setSubmitEntryDraft] = useState(null);
@@ -93,6 +108,7 @@ async function loadTemplate() {
 }
 
   const [authUser, setAuthUser] = useState(null);
+  const [activeView, setActiveView] = useState(getStoredAdminView);
   const [authLoading, setAuthLoading] = useState(true);
   const [isRecoveryMode, setIsRecoveryMode] = useState(
     () => window.location.pathname === '/confirm-password'
@@ -100,6 +116,8 @@ async function loadTemplate() {
   const [toast, setToast] = useState(null);
   const toastTimeoutRef = useRef(null);
   const toastDismissRef = useRef(null);
+  const authUserId = authUser?.id;
+  const authUserRole = authUser?.role;
 
   // Restore session on page load / listen for auth changes
   useEffect(() => {
@@ -136,7 +154,9 @@ async function loadTemplate() {
     const { data: { subscription } } = authService.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') {
         setAuthUser(null);
+        setActiveView(null);
         setIsRecoveryMode(false);
+        window.localStorage.removeItem(ADMIN_VIEW_STORAGE_KEY);
       }
       if (event === 'PASSWORD_RECOVERY') {
         setIsRecoveryMode(true);
@@ -148,6 +168,18 @@ async function loadTemplate() {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!authUserId) return;
+
+    if (authUserRole !== "admin") {
+      setActiveView("encoder");
+      window.localStorage.removeItem(ADMIN_VIEW_STORAGE_KEY);
+      return;
+    }
+
+    setActiveView(getStoredAdminView());
+  }, [authUserId, authUserRole]);
 
   useEffect(() => {
     let cancelled = false;
@@ -245,6 +277,10 @@ async function loadTemplate() {
 
   const isAuthenticated = Boolean(authUser);
   const currentRole = authUser?.role || null;
+  const currentView = currentRole === "admin" ? activeView : currentRole;
+  const defaultAuthenticatedPath = getDefaultAuthenticatedPath(currentRole, activeView);
+  const canUseAdminView = currentRole === "admin" && currentView === "admin";
+  const canUseEncoderView = currentRole === "encoder" || currentView === "encoder";
 
   const encoderEntries = useMemo(() => {
     if (!authUser?.id) return [];
@@ -390,6 +426,12 @@ async function loadTemplate() {
   };
 
   const handleLogin = (user) => {
+    if (user.role === "admin") {
+      setActiveView(null);
+      window.localStorage.removeItem(ADMIN_VIEW_STORAGE_KEY);
+    } else {
+      setActiveView("encoder");
+    }
     setAuthUser(user);
   };
 
@@ -400,8 +442,29 @@ async function loadTemplate() {
       console.error("Sign out error:", err);
     }
     setAuthUser(null);
+    setActiveView(null);
+    window.localStorage.removeItem(ADMIN_VIEW_STORAGE_KEY);
     setEntryBeingEdited(null);
     setSubmitEntryDraft(null);
+  };
+
+  const handleChooseView = (view) => {
+    if (currentRole !== "admin") return;
+    setActiveView(view);
+    window.localStorage.setItem(ADMIN_VIEW_STORAGE_KEY, view);
+    setEntryBeingEdited(null);
+    setSubmitEntryDraft(null);
+    navigate(getDefaultAuthenticatedPath("admin", view), { replace: true });
+  };
+
+  const handleSwitchView = () => {
+    const nextView = currentView === "admin" ? "encoder" : "admin";
+    handleChooseView(nextView);
+    showToast({
+      title: `${nextView === "admin" ? "Admin" : "Account Officer"} view`,
+      description: "Your workspace view has been switched.",
+      type: "success",
+    });
   };
 
   const handleStartEdit = (entry) => {
@@ -422,7 +485,7 @@ async function loadTemplate() {
   };
 
   const navItems = useMemo(() => {
-    if (currentRole === "admin") {
+    if (currentView === "admin") {
       return [
         { to: "/admin/dashboard", label: "Dashboard", icon: "dashboard" },
         { to: "/admin/review", label: "Admin Review", icon: "review" },
@@ -442,7 +505,7 @@ async function loadTemplate() {
       { to: "/entries", label: "My Entries", icon: "entries" },
       { to: "/submit", label: "Submit Entry", icon: "submit" },
     ];
-  }, [currentRole]);
+  }, [currentView]);
 
   if (authLoading) {
     return (
@@ -463,6 +526,24 @@ async function loadTemplate() {
     );
   }
 
+  if (currentRole === "admin" && !activeView) {
+    return (
+      <Routes>
+        <Route
+          path="/choose-view"
+          element={
+            <ChooseView
+              currentUser={authUser}
+              onChooseView={handleChooseView}
+              onLogout={handleLogout}
+            />
+          }
+        />
+        <Route path="*" element={<Navigate to="/choose-view" replace />} />
+      </Routes>
+    );
+  }
+
   if (
     dataLoading &&
     entries.length === 0 &&
@@ -479,23 +560,28 @@ async function loadTemplate() {
     <AppLayout
       navItems={navItems}
       currentRole={currentRole}
+      currentView={currentView}
       currentUser={authUser}
+      canSwitchView={currentRole === "admin" && Boolean(currentView)}
+      onSwitchView={handleSwitchView}
       onLogout={handleLogout}
       toast={toast}
       onDismissToast={() => { if (toast?.id) dismissToast(toast.id); }}
     >
       <Routes>
-        <Route path="/login" element={<Navigate to={currentRole === "admin" ? "/admin/dashboard" : "/"} replace />} />
-        <Route path="/forgot-password" element={<Navigate to={currentRole === "admin" ? "/admin/dashboard" : "/"} replace />} />
-        <Route path="/confirm-password" element={<Navigate to={currentRole === "admin" ? "/admin/dashboard" : "/"} replace />} />
-        <Route path="/" element={currentRole === "encoder" ? <Home entries={encoderEntries} submissionWindow={submissionWindow} /> : <Navigate to="/admin/dashboard" replace />} />
-        <Route path="/entries" element={currentRole === "encoder" ? <MyEntries entries={encoderEntries} onEditEntry={handleStartEdit} onDeleteEntry={handleDeleteEntry} onShowToast={showToast} submissionWindow={submissionWindow} /> : <Navigate to="/admin/dashboard" replace />} />
-        <Route path="/submit" element={currentRole === "encoder" ? <SubmitEntry onAddEntry={handleAddEntry} entryToEdit={entryBeingEdited} onSaveEditedEntry={handleSaveEditedEntry} clearEditingEntry={clearEditingEntry} submissionWindow={submissionWindow} draftState={submitEntryDraft} onDraftChange={setSubmitEntryDraft} onClearDraft={clearSubmitEntryDraft} currentUser={authUser} templateData={templateData} /> : <Navigate to="/admin/dashboard" replace />} />
-        <Route path="/admin/manage-template" element={currentRole === "admin" ? <ManageTemplate templateData={templateData} onUpdateTemplateData={setTemplateData} onResetTemplate={() => setTemplateData(createInitialTemplateState())} onShowToast={showToast} /> : <Navigate to="/" replace />} />
-        <Route path="/admin/dashboard" element={currentRole === "admin" ? <AdminDashboard entries={entries} submissionWindow={submissionWindow} onUpdateSubmissionWindow={handleUpdateSubmissionWindow} /> : <Navigate to="/" replace />} />
-        <Route path="/admin/review" element={currentRole === "admin" ? <AdminReview entries={entries} currentUser={authUser} onUpdateEntry={handleUpdateEntry} onDeleteEntry={handleDeleteEntry} onShowToast={showToast} /> : <Navigate to="/" replace />} />
-        <Route path="/admin/manage-accounts" element={currentRole === "admin" ? <ManageAccounts accounts={accounts} onUpdateAccount={handleUpdateAccount} onShowToast={showToast} /> : <Navigate to="/" replace />} />
-        <Route path="/admin/manage-accounts/new" element={currentRole === "admin" ? <AddNewAccount accounts={accounts} onAddAccount={handleAddAccount} onShowToast={showToast} /> : <Navigate to="/" replace />} />
+        <Route path="/login" element={<Navigate to={defaultAuthenticatedPath} replace />} />
+        <Route path="/forgot-password" element={<Navigate to={defaultAuthenticatedPath} replace />} />
+        <Route path="/confirm-password" element={<Navigate to={defaultAuthenticatedPath} replace />} />
+        <Route path="/choose-view" element={currentRole === "admin" ? <ChooseView currentUser={authUser} onChooseView={handleChooseView} /> : <Navigate to="/" replace />} />
+        <Route path="/" element={canUseEncoderView ? <Home entries={encoderEntries} submissionWindow={submissionWindow} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
+        <Route path="/entries" element={canUseEncoderView ? <MyEntries entries={encoderEntries} onEditEntry={handleStartEdit} onDeleteEntry={handleDeleteEntry} onShowToast={showToast} submissionWindow={submissionWindow} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
+        <Route path="/submit" element={canUseEncoderView ? <SubmitEntry onAddEntry={handleAddEntry} entryToEdit={entryBeingEdited} onSaveEditedEntry={handleSaveEditedEntry} clearEditingEntry={clearEditingEntry} submissionWindow={submissionWindow} draftState={submitEntryDraft} onDraftChange={setSubmitEntryDraft} onClearDraft={clearSubmitEntryDraft} currentUser={authUser} templateData={templateData} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
+        <Route path="/admin/manage-template" element={canUseAdminView ? <ManageTemplate templateData={templateData} onUpdateTemplateData={setTemplateData} onResetTemplate={() => setTemplateData(createInitialTemplateState())} onShowToast={showToast} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
+        <Route path="/admin/dashboard" element={canUseAdminView ? <AdminDashboard entries={entries} submissionWindow={submissionWindow} onUpdateSubmissionWindow={handleUpdateSubmissionWindow} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
+        <Route path="/admin/review" element={canUseAdminView ? <AdminReview entries={entries} currentUser={authUser} onUpdateEntry={handleUpdateEntry} onDeleteEntry={handleDeleteEntry} onShowToast={showToast} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
+        <Route path="/admin/manage-accounts" element={canUseAdminView ? <ManageAccounts accounts={accounts} onUpdateAccount={handleUpdateAccount} onShowToast={showToast} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
+        <Route path="/admin/manage-accounts/new" element={canUseAdminView ? <AddNewAccount accounts={accounts} onAddAccount={handleAddAccount} onShowToast={showToast} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
+        <Route path="*" element={<Navigate to={defaultAuthenticatedPath} replace />} />
       </Routes>
     </AppLayout>
   );

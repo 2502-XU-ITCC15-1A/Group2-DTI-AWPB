@@ -152,8 +152,9 @@ export default function AdminEditUserModal({
               </p>
               <p className="mt-2 text-sm leading-7 text-slate-600">
                 Use `enc_` for Account Officer accounts and `adm_` for admin accounts.
-                Leave the password fields blank if there are no password
-                changes.
+                Each email should belong to one account. Admins can switch
+                between Admin and Account Officer views after login. Leave the
+                password fields blank if there are no password changes.
               </p>
             </div>
           </div>

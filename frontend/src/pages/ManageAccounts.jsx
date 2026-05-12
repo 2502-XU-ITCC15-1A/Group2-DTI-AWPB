@@ -230,11 +230,10 @@ export default function ManageAccounts({
       accounts.some(
         (account) =>
           account.id !== editTarget?.id &&
-          account.role === editForm.role &&
           account.email?.trim().toLowerCase() === normalizedEmail,
       )
     ) {
-      nextErrors.email = "This email is already assigned to another account with this role.";
+      nextErrors.email = "This email is already assigned to another account.";
     }
 
     if (editForm.password || editForm.confirmPassword) {

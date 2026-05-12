@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronRight,
   SlidersHorizontal,
+  ArrowLeftRight,
 } from "lucide-react";
 
 const iconMap = {
@@ -34,7 +35,10 @@ export default function AppLayout({
   children,
   navItems = [],
   currentRole = "encoder",
+  currentView = currentRole,
   currentUser,
+  canSwitchView = false,
+  onSwitchView,
   onLogout,
   toast,
   onDismissToast,
@@ -78,7 +82,7 @@ export default function AppLayout({
 
           <div className="mb-6">
             <p className="text-3xl font-bold uppercase tracking-wide">
-              {currentRole === "admin" ? "Admin" : "Account Officer"}
+              {getRoleLabel(currentView)}
             </p>
             <div className="mt-4 h-px bg-white/20" />
           </div>
@@ -182,11 +186,28 @@ export default function AppLayout({
                   {currentUser?.fullName || currentUser?.username || "User"}
                 </p>
                 <p className="text-xs text-white/70 capitalize">
-                  {getRoleLabel(currentUser?.role)}
+                  {currentRole === "admin"
+                    ? `${getRoleLabel(currentView)} View`
+                    : getRoleLabel(currentUser?.role)}
                 </p>
               </div>
             </div>
           </div>
+
+          {canSwitchView ? (
+            <button
+              type="button"
+              onClick={onSwitchView}
+              className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium text-white/90 transition hover:bg-white/10 hover:text-white"
+            >
+              <ArrowLeftRight size={18} />
+              <span>
+                {currentView === "admin"
+                  ? "Switch to Account Officer"
+                  : "Switch to Admin"}
+              </span>
+            </button>
+          ) : null}
 
           <button
             type="button"

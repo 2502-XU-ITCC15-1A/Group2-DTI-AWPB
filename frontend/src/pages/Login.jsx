@@ -97,7 +97,7 @@ export default function Login({ onLogin }) {
                             name="username"
                             value={formData.username}
                             onChange={handleChange}
-                            placeholder="enc_user or adm_admin"
+                            placeholder="Username or email"
                             className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:ring-2 focus:ring-slate-300"
                         />
                         

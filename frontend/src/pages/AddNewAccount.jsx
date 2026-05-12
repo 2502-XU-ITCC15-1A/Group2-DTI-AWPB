@@ -157,11 +157,10 @@ export default function AddNewAccount({
     } else if (
       accounts.some(
         (account) =>
-          account.role === form.role &&
           account.email?.trim().toLowerCase() === normalizedEmail,
       )
     ) {
-      nextErrors.email = "This email is already assigned to another account with this role.";
+      nextErrors.email = "This email is already assigned to another account.";
 
     }
 
@@ -254,7 +253,7 @@ export default function AddNewAccount({
 
         <p className="mt-1 text-sm text-slate-500">
 
-          Create a new Account Officer or admin account for the AWPB system.
+          Create a new user account for the AWPB system.
 
         </p>
 
@@ -270,9 +269,7 @@ export default function AddNewAccount({
 
           <p className="mt-1 text-sm text-slate-500">
 
-            Fill in the account details and assign the proper role-specific
-
-            username.
+            Fill in the account details and assign the proper access role.
 
           </p>
 
@@ -502,9 +499,9 @@ export default function AddNewAccount({
 
                   Use `enc_` for Account Officer accounts and `adm_` for admin
 
-                  accounts. Usernames should stay unique and role-specific to
+                  accounts. Each email should belong to one account; admins can
 
-                  preserve separate access for submission and review work.
+                  switch between Admin and Account Officer views after login.
 
                 </p>
 
