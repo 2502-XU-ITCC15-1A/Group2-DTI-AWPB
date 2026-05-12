@@ -231,6 +231,13 @@ function formatCurrency(value) {
   }).format(value || 0);
 }
 
+function formatTarget(value) {
+  return new Intl.NumberFormat("en-PH", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(value || 0);
+}
+
 function formatDateOnly(value) {
   if (!value) return "N/A";
 
@@ -480,6 +487,10 @@ export default function SubmitEntry({
 
   const grandTotal = useMemo(() => {
     return monthlyRows.reduce((sum, row) => sum + row.amount, 0);
+  }, [monthlyRows]);
+
+  const totalTarget = useMemo(() => {
+    return monthlyRows.reduce((sum, row) => sum + row.target, 0);
   }, [monthlyRows]);
 
   useEffect(() => {
@@ -1339,8 +1350,11 @@ export default function SubmitEntry({
                   </tbody>
                   <tfoot className="border-t bg-gray-50">
                     <tr>
-                      <td className="px-4 py-3 font-semibold" colSpan={2}>
-                        Grand Total
+                      <td className="px-4 py-3 font-semibold">
+                        Total
+                      </td>
+                      <td className="px-4 py-3 font-semibold">
+                        {formatTarget(totalTarget)}
                       </td>
                       <td className="px-4 py-3 font-semibold">
                         {formatCurrency(grandTotal)}
@@ -1440,6 +1454,10 @@ export default function SubmitEntry({
                         : "None"}
                     </p>
                     <p>
+                      <span className="font-medium">Total Target:</span>{" "}
+                      {formatTarget(totalTarget)}
+                    </p>
+                    <p>
                       <span className="font-medium">Grand Total:</span>{" "}
                       {formatCurrency(grandTotal)}
                     </p>
@@ -1476,6 +1494,19 @@ export default function SubmitEntry({
                           </tr>
                         ))}
                       </tbody>
+                      <tfoot className="border-t bg-gray-50">
+                        <tr>
+                          <td className="px-3 py-2 font-semibold">
+                            Total
+                          </td>
+                          <td className="px-3 py-2 font-semibold">
+                            {formatTarget(totalTarget)}
+                          </td>
+                          <td className="px-3 py-2 font-semibold">
+                            {formatCurrency(grandTotal)}
+                          </td>
+                        </tr>
+                      </tfoot>
                     </table>
                   </div>
                 </div>
