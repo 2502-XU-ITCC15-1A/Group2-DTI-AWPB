@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Eye, Trash2, History, X, Wallet, PlusCircle } from "lucide-react";
+import { Search, Eye, Trash2, History, Pencil } from "lucide-react";
 import { generateApprovedEntryPdf } from "../services/pdfService";
 import { csvExportService } from "../services/csvService";
 
 import AdminEntryReviewModal from "../components/admin/AdminEntryReviewModal";
 import AdminDeleteEntryModal from "../components/admin/AdminDeleteEntryModal";
 import AdminBudgetRecordsModal from "../components/admin/AdminBudgetRecordsModal";
+import AdminUnitAllocationModal from "../components/admin/AdminUnitAllocationModal";
+import AdminUnitRecordsModal from "../components/admin/AdminUnitRecordsModal";
 
 import { supabase } from "../lib/supabase";
 import { entriesService } from "../services/supabaseService";
@@ -34,18 +36,6 @@ function formatCurrency(value) {
 }
 
 function formatDate(value) {
-  if (!value) return "N/A";
-  return new Date(value).toLocaleString("en-PH", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-}
-
-function formatRecordDateTime(value) {
   if (!value) return "N/A";
   return new Date(value).toLocaleString("en-PH", {
     year: "numeric",
@@ -97,25 +87,63 @@ export default function AdminReview({
   const [yearFilter, setYearFilter] = useState("all");
   const [totalBudget, setTotalBudget] = useState(0);
   const [transactions, setTransactions] = useState([]);
-  const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [budgetAmount, setBudgetAmount] = useState("");
-  const [budgetDesc, setBudgetDesc] = useState("");
 
   // Unit-specific budget state
   const UNITS = UNIT_CODES;
   const [unitBudgets, setUnitBudgets] = useState({});
-  const [unitTransactions, setUnitTransactions] = useState({});
   const [activeUnitBudgetModal, setActiveUnitBudgetModal] = useState(null);
   const [activeUnitHistoryModal, setActiveUnitHistoryModal] = useState(null);
   const [unitBudgetAmount, setUnitBudgetAmount] = useState("");
   const [unitBudgetDesc, setUnitBudgetDesc] = useState("");
+  const [unitBudgetAdjustmentType, setUnitBudgetAdjustmentType] = useState("ADDED");
 
   const entries = entriesProp;
 
   const approvedEntries = useMemo(() => {
     return entries.filter((e) => isApprovedStatus(e.status));
   }, [entries]);
+
+  const approvedBudgetByUnit = useMemo(() => {
+    const totals = Object.fromEntries(UNITS.map((unit) => [unit, 0]));
+    approvedEntries.forEach((entry) => {
+      const unit = normalizeUnitCode(entry.unit);
+      totals[unit] = (totals[unit] || 0) + Number(entry.grandTotal || 0);
+    });
+    return totals;
+  }, [UNITS, approvedEntries]);
+
+  const totalApprovedBudget = useMemo(() => {
+    return Object.values(approvedBudgetByUnit).reduce((sum, value) => sum + value, 0);
+  }, [approvedBudgetByUnit]);
+
+  const unitAllocationStats = useMemo(() => {
+    return Object.fromEntries(
+      UNITS.map((unit) => {
+        const remaining = Number(unitBudgets[unit] || 0);
+        const approved = Number(approvedBudgetByUnit[unit] || 0);
+        return [
+          unit,
+          {
+            allocated: remaining + approved,
+            approved,
+            remaining,
+          },
+        ];
+      }),
+    );
+  }, [UNITS, approvedBudgetByUnit, unitBudgets]);
+
+  const totalAllocatedBudget = totalBudget + totalApprovedBudget;
+
+  const approvedEntriesByUnit = useMemo(() => {
+    return Object.fromEntries(
+      UNITS.map((unit) => [
+        unit,
+        approvedEntries.filter((entry) => normalizeUnitCode(entry.unit) === unit),
+      ]),
+    );
+  }, [UNITS, approvedEntries]);
 
   const availableUnits = useMemo(() => {
     return [...new Set(entries.map((entry) => normalizeUnitCode(entry.unit)).filter(Boolean))].sort();
@@ -180,8 +208,8 @@ export default function AdminReview({
   const unitBudget = unitBudgets[entryUnit] || 0;
   if (entryAmount > unitBudget) {
     onShowToast?.({
-      title: "Insufficient budget",
-      description: `Need ₱${entryAmount.toLocaleString()} but ${entryUnit} only has ₱${unitBudget.toLocaleString()} available. Please add budget first.`,
+      title: "Insufficient allocation",
+      description: `Need ₱${entryAmount.toLocaleString()} but ${entryUnit} only has ₱${unitBudget.toLocaleString()} remaining. Edit the unit allocation first.`,
       type: "error",
     });
     return;
@@ -206,7 +234,7 @@ export default function AdminReview({
       },
       {
         title: "Entry approved",
-        description: `${entryTitle} was approved successfully. ₱${entryAmount.toLocaleString()} deducted from budget.`,
+        description: `${entryTitle} was approved successfully. ₱${entryAmount.toLocaleString()} deducted from ${entryUnit}'s remaining allocation.`,
         type: "success",
       }
     );
@@ -271,16 +299,16 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
     if (error) throw error;
     
     onShowToast?.({
-      title: "Budget restored",
-      description: `₱${amount.toLocaleString()} was added back to budget for: ${entryTitle}`,
+      title: "Allocation restored",
+      description: `₱${amount.toLocaleString()} was added back to the allocation for: ${entryTitle}`,
       type: "success",
     });
     
     return true;
   } catch (err) {
-    console.error("Failed to reverse budget deduction:", err);
+    console.error("Failed to reverse allocation deduction:", err);
     onShowToast?.({
-      title: "Could not restore budget",
+      title: "Could not restore allocation",
       description: err.message || "Please check the transaction history.",
       type: "error",
     });
@@ -295,9 +323,9 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
   const newStatus = "Returned";
   const entryAmount = selectedEntry.grandTotal || 0;
 
-  // Check if it was approved and reverse budget if needed
+  // Check if it was approved and reverse allocation deduction if needed
   if (isApprovedStatus(oldStatus)) {
-    console.log(`Entry was ${oldStatus}, reversing budget deduction of ₱${entryAmount.toLocaleString()}`);
+    console.log(`Entry was ${oldStatus}, reversing allocation deduction of ₱${entryAmount.toLocaleString()}`);
     const reversed = await reverseBudgetDeduction(selectedEntry.id, entryTitle, entryAmount, oldStatus, newStatus, selectedEntry.unit);
     if (!reversed) {
       return; // Stop if reversal failed
@@ -314,7 +342,7 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
     },
     {
       title: "Entry returned",
-      description: `${entryTitle} was returned for revision.${isApprovedStatus(oldStatus) ? ` ₱${entryAmount.toLocaleString()} restored to budget.` : ""}`,
+      description: `${entryTitle} was returned for revision.${isApprovedStatus(oldStatus) ? ` ₱${entryAmount.toLocaleString()} restored to allocation.` : ""}`,
       type: "success",
     }
   );
@@ -330,7 +358,7 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
       const entryAmount = selectedEntry.grandTotal || 0;
 
       if(isApprovedStatus(oldStatus)) {
-         console.log(`Entry was ${oldStatus}, reversing budget deduction of ₱${entryAmount.toLocaleString()}`);
+         console.log(`Entry was ${oldStatus}, reversing allocation deduction of ₱${entryAmount.toLocaleString()}`);
     const reversed = await reverseBudgetDeduction(selectedEntry.id, entryTitle, entryAmount, oldStatus, newStatus, selectedEntry.unit);
     if (!reversed) return;
   }
@@ -344,7 +372,7 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
       },
       {
         title: "Entry rejected",
-        description: `${entryTitle} was rejected.${isApprovedStatus(oldStatus) ? ` ₱${entryAmount.toLocaleString()} restored to budget.` : ""}`,
+        description: `${entryTitle} was rejected.${isApprovedStatus(oldStatus) ? ` ₱${entryAmount.toLocaleString()} restored to allocation.` : ""}`,
       type: "success",
       }
     );
@@ -400,14 +428,12 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
           .map((tx) => ({ ...tx, unit: normalizeUnitCode(tx.unit) }));
         setTransactions(allUnitTx);
 
-    // Per-unit budget calculation
+    // Per-unit remaining allocation calculation
     const budgets = {};
-    const txByUnit = {};
     UNITS.forEach((unit) => {
       const unitTx = (txData || [])
         .filter((tx) => normalizeUnitCode(tx.unit) === unit)
         .map((tx) => ({ ...tx, unit: normalizeUnitCode(tx.unit) }));
-      txByUnit[unit] = unitTx;
       let unitTotal = 0;
       unitTx.forEach((tx) => {
         if (tx.type === 'ADDED') {
@@ -419,88 +445,67 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
       budgets[unit] = unitTotal;
     });
     setUnitBudgets(budgets);
-    setUnitTransactions(txByUnit);
 
-    // Total budget = sum of all unit budgets
+    // Total remaining allocation = sum of all unit remaining balances
     const grandTotal = UNITS.reduce((sum, u) => sum + (budgets[u] || 0), 0);
     setTotalBudget(grandTotal);
 
     } catch (err) {
-      console.error("Failed to load budget transactions:", err);
+      console.error("Failed to load allocation transactions:", err);
     }
   };
-  // Add budget
-  const handleAddBudget = async () => {
-    const amount = parseFloat(budgetAmount);
-    if (!amount|| amount <= 0) {
-      onShowToast?.({
-        title: "Invalid amount",
-        description: "Please enter a valid budget amount.",
-        type: "error",
-      });
-      return;
-    }
-    try {
-      const { error } = await supabase.from("budget_transactions").insert({
-        amount: amount,
-        type: 'ADDED',
-        description: budgetDesc || 'Budget addition',
-      });
-
-      if (error) throw error;
-      await loadBudgetData();
-      setShowBudgetModal(false);
-      setBudgetAmount("");
-      setBudgetDesc("");
-      onShowToast({
-        title: "Budget added",
-        description: `₱${amount.toLocaleString()} added successfully.`,
-        type: "success",
-      });
-    } catch (err) {
-      console.error("Failed to add budget transaction:", err);
-      onShowToast({
-        title: "Could not add budget",
-        description: err.message || "Please try again.",
-        type: "error",
-      });
-    }
+  const closeUnitAllocationModal = () => {
+    setActiveUnitBudgetModal(null);
+    setUnitBudgetAmount("");
+    setUnitBudgetDesc("");
+    setUnitBudgetAdjustmentType("ADDED");
   };
 
-  // Add budget for a specific unit
-  const handleAddUnitBudget = async () => {
+  const handleSaveUnitAllocation = async () => {
     const amount = parseFloat(unitBudgetAmount);
     const unit = activeUnitBudgetModal;
     if (!amount || amount <= 0) {
       onShowToast?.({
         title: "Invalid amount",
-        description: "Please enter a valid budget amount.",
+        description: "Please enter a valid allocation amount.",
         type: "error",
       });
       return;
     }
+
+    if (unitBudgetAdjustmentType === "DEDUCTED" && amount > Number(unitBudgets[unit] || 0)) {
+      onShowToast?.({
+        title: "Adjustment exceeds remaining allocation",
+        description: `${unit} only has ₱${Number(unitBudgets[unit] || 0).toLocaleString()} remaining.`,
+        type: "error",
+      });
+      return;
+    }
+
     try {
       const { error } = await supabase.from("budget_transactions").insert({
         amount: amount,
-        type: 'ADDED',
-        description: unitBudgetDesc || `Budget addition for ${unit}`,
+        type: unitBudgetAdjustmentType,
+        description:
+          unitBudgetDesc ||
+          (unitBudgetAdjustmentType === "ADDED"
+            ? `Additional allocation for ${unit}`
+            : `Allocation reduction for ${unit}`),
         unit: normalizeUnitCode(unit),
       });
 
       if (error) throw error;
       await loadBudgetData();
-      setActiveUnitBudgetModal(null);
-      setUnitBudgetAmount("");
-      setUnitBudgetDesc("");
+      closeUnitAllocationModal();
       onShowToast({
-        title: "Unit budget added",
-        description: `₱${amount.toLocaleString()} added to ${unit} successfully.`,
+        title: "Allocation updated",
+        description: `${unit} allocation was ${unitBudgetAdjustmentType === "ADDED" ? "increased" : "reduced"} by ₱${amount.toLocaleString()}.`,
         type: "success",
       });
     } catch (err) {
-      console.error("Failed to add unit budget transaction:", err);
+      console.error("Failed to update unit allocation:", err);
       onShowToast({
-        title: "Could not add budget",
+        title: "Could not update allocation",
         description: err.message || "Please try again.",
         type: "error",
       });
@@ -522,269 +527,146 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
         </p>
       </div>
       
-       <Card className="border-0 bg-gradient-to-br from-[#6ea3a6] via-[#4f8f93] to-[#2f7f86] text-white shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
-    <CardContent className="p-4 md:p-5">
-    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-      <div className="flex items-start gap-3">
-        <div className="rounded-2xl bg-white/20 p-3 text-white">
-          <Wallet size={20} />
-        </div>
+      <Card className="border-0 bg-gradient-to-br from-[#6ea3a6] via-[#4f8f93] to-[#2f7f86] text-white shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
+        <CardContent className="p-4 md:p-5">
+          <div className="grid gap-5 xl:grid-cols-[1fr_auto] xl:items-center">
+            <div>
+              <p className="text-base font-semibold text-white">
+                Allocation Summary
+              </p>
+              <p className="mt-1 max-w-2xl text-sm text-white/85">
+                Unit allocations set approval limits. Approved entries reduce remaining balances.
+              </p>
+            </div>
 
-        <div className="space-y-1">
-          <p className="text-base font-semibold text-white">Total Budget</p>
-          <p className="text-3xl font-bold tracking-tight">
-              ₱{totalBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </p>
-          <p className="text-sm text-white/85">Available for approvals</p>
-        </div>
-      </div>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div className="min-w-[150px] rounded-2xl bg-white/14 px-4 py-2.5">
+                  <p className="text-xs font-medium text-white/70">Allocated</p>
+                  <p className="text-base font-bold text-white">
+                    ₱{totalAllocatedBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="min-w-[150px] rounded-2xl bg-white/14 px-4 py-2.5">
+                  <p className="text-xs font-medium text-white/70">Approved</p>
+                  <p className="text-base font-bold text-white">
+                    ₱{totalApprovedBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="min-w-[150px] rounded-2xl bg-white/22 px-4 py-2.5">
+                  <p className="text-xs font-medium text-white/75">Remaining</p>
+                  <p className="text-base font-bold text-white">
+                    ₱{totalBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </div>
 
-      <Button
-        onClick={() => setShowHistoryModal(true)}
-        variant="outline"
-        className="w-fit border-white/35 bg-white/10 text-white shadow-sm hover:bg-white/20 hover:text-white"
-      >
-        <History className="h-4 w-4 mr-2" />
-        View Records
-      </Button>
-    </div>
-  </CardContent>
-</Card>
-
-{/* Add Budget Modal */}
-{showBudgetModal && (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-    <div className="bg-white rounded-xl shadow-2xl w-[450px]">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-4 rounded-t-xl flex justify-between items-center">
-        <div>
-          <h3 className="text-xl font-semibold text-white">Add Budget</h3>
-          <p className="text-emerald-100 text-sm mt-1">Increase available funds</p>
-        </div>
-        <button 
-          onClick={() => setShowBudgetModal(false)}
-          className="text-white hover:bg-white/20 rounded-lg p-1 transition"
-        >
-          <X className="h-5 w-5" />
-        </button>
-      </div>
-      
-      {/* Body */}
-      <div className="p-6 space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">Amount (₱)</label>
-          <Input 
-            type="number" 
-            placeholder="0.00" 
-            value = {budgetAmount}
-            onChange={(e) => setBudgetAmount(e.target.value)}
-            className="text-lg font-medium"
-          />
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">Description (optional)</label>
-          <Input 
-            type="text" 
-            placeholder="e.g., Budget realignment, Additional funds" 
-            value={budgetDesc}
-            onChange={(e) => setBudgetDesc(e.target.value)}
-          />
-        </div>
-        
-        <div className="flex gap-3 pt-4">
-          <Button 
-          onClick={handleAddBudget}
-          className="flex-1 bg-emerald-600 hover:bg-emerald-700">
-            Add Budget
-          </Button>
-          <Button 
-            onClick={() => setShowBudgetModal(false)} 
-            variant="outline" 
-            className="flex-1"
-          >
-            Cancel
-          </Button>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
+              <Button
+                onClick={() => setShowHistoryModal(true)}
+                variant="outline"
+                className="w-fit rounded-xl border-white/35 bg-white/10 text-white shadow-sm hover:bg-white/20 hover:text-white"
+              >
+                <History className="mr-2 h-4 w-4" />
+                View Records
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
 {showHistoryModal && (
   <AdminBudgetRecordsModal
     approvedEntries={approvedEntries}
     onClose={() => setShowHistoryModal(false)}
-    totalBudget={totalBudget}
     transactions={transactions}
   />
 )}
 
-{/* Unit-specific Budget Cards */}
-<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-  {UNITS.map((unit) => (
-    <Card key={unit} className="bg-gradient-to-br from-[#1f2f74] via-[#243b86] to-[#2a4694] text-white shadow-md">
-      <CardContent className="p-4">
-        <div className="space-y-3">
-          <div>
-            <p className="text-slate-300 text-xs font-semibold tracking-wide">{unit} BUDGET</p>
-            <p className="text-2xl font-bold tracking-tight mt-1">
-              ₱{(unitBudgets[unit] || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              onClick={() => setActiveUnitBudgetModal(unit)}
-              className="flex-1 bg-white text-slate-800 hover:bg-slate-100 text-xs"
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {UNITS.map((unit) => {
+          const stats = unitAllocationStats[unit] || {};
+          return (
+            <Card
+              key={unit}
+              className="overflow-hidden border-0 bg-gradient-to-br from-[#1f2f74] via-[#243b86] to-[#2a4694] text-white shadow-[0_10px_22px_rgba(31,47,116,0.18)]"
             >
-              <PlusCircle className="h-3 w-3 mr-1" />
-              Add Budget
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => setActiveUnitHistoryModal(unit)}
-              variant="outline"
-              className="flex-1 border-white/30 text-slate-800 hover:bg-white/10 hover:text-white text-xs"
-            >
-              <History className="h-3 w-3 mr-1" />
-              View Records
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  ))}
-</div>
+              <CardContent className="p-4">
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
+                        Unit Allocation
+                      </p>
+                      <h2 className="mt-1 text-2xl font-bold tracking-tight">{unit}</h2>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-white/70">Remaining</p>
+                      <p className="text-2xl font-bold leading-tight">
+                        ₱{Number(stats.remaining || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  </div>
 
-{/* Unit Add Budget Modal */}
-{activeUnitBudgetModal && (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-    <div className="bg-white rounded-xl shadow-2xl w-[450px]">
-      <div className="bg-gradient-to-r from-slate-700 to-slate-900 px-6 py-4 rounded-t-xl flex justify-between items-center">
-        <div>
-          <h3 className="text-xl font-semibold text-white">Add Budget — {activeUnitBudgetModal}</h3>
-          <p className="text-slate-300 text-sm mt-1">Increase funds for {activeUnitBudgetModal}</p>
-        </div>
-        <button
-          onClick={() => { setActiveUnitBudgetModal(null); setUnitBudgetAmount(""); setUnitBudgetDesc(""); }}
-          className="text-white hover:bg-white/20 rounded-lg p-1 transition"
-        >
-          <X className="h-5 w-5" />
-        </button>
-      </div>
-      <div className="p-6 space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">Amount (₱)</label>
-          <Input
-            type="number"
-            placeholder="0.00"
-            value={unitBudgetAmount}
-            onChange={(e) => setUnitBudgetAmount(e.target.value)}
-            className="text-lg font-medium"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">Description (optional)</label>
-          <Input
-            type="text"
-            placeholder="e.g., Budget realignment, Additional funds"
-            value={unitBudgetDesc}
-            onChange={(e) => setUnitBudgetDesc(e.target.value)}
-          />
-        </div>
-        <div className="flex gap-3 pt-4">
-          <Button onClick={handleAddUnitBudget} className="flex-1 bg-slate-800 hover:bg-slate-900">
-            Add Budget
-          </Button>
-          <Button
-            onClick={() => { setActiveUnitBudgetModal(null); setUnitBudgetAmount(""); setUnitBudgetDesc(""); }}
-            variant="outline"
-            className="flex-1"
-          >
-            Cancel
-          </Button>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-white/15 pt-3">
+                    <p className="text-xs text-white/55">Allocated</p>
+                    <p className="text-xs text-white/55">Approved</p>
+                    <p className="text-sm font-semibold">
+                      ₱{Number(stats.allocated || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-sm font-semibold">
+                      ₱{Number(stats.approved || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
 
-{/* Unit History Modal */}
-{activeUnitHistoryModal && (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-    <div className="bg-white rounded-xl shadow-2xl w-[700px] max-h-[600px] flex flex-col">
-      <div className="bg-gradient-to-r from-slate-700 to-slate-900 px-6 py-4 rounded-t-xl flex justify-between items-center">
-        <div>
-          <h3 className="text-xl font-semibold text-white">{activeUnitHistoryModal} — Transaction History</h3>
-          <p className="text-slate-300 text-sm mt-1">Budget movements for {activeUnitHistoryModal}</p>
-        </div>
-        <button
-          onClick={() => setActiveUnitHistoryModal(null)}
-          className="text-white hover:bg-white/20 rounded-lg p-1 transition"
-        >
-          <X className="h-5 w-5" />
-        </button>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => setActiveUnitBudgetModal(unit)}
+                      className="flex-1 rounded-xl bg-white text-slate-900 hover:bg-slate-100"
+                    >
+                      <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                      Edit Allocation
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => setActiveUnitHistoryModal(unit)}
+                      variant="outline"
+                      className="flex-1 rounded-xl border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                    >
+                      <History className="mr-1.5 h-3.5 w-3.5" />
+                      Records
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
-      <div className="px-6 pt-4 pb-2 border-b">
-        <div className="flex justify-end">
-          <Badge className="bg-slate-100 text-slate-700 border-0 text-base px-4 py-2">
-            Current Balance: ₱{(unitBudgets[activeUnitHistoryModal] || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </Badge>
-        </div>
-      </div>
-      <div className="overflow-y-auto flex-1">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 sticky top-0">
-            <tr className="border-b">
-              <th className="px-6 py-3 text-left font-semibold text-slate-700">Date & Time</th>
-              <th className="px-6 py-3 text-left font-semibold text-slate-700">Type</th>
-              <th className="px-6 py-3 text-left font-semibold text-slate-700">Amount</th>
-              <th className="px-6 py-3 text-left font-semibold text-slate-700">Description</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(unitTransactions[activeUnitHistoryModal] || []).length === 0 ? (
-              <tr>
-                <td colSpan="4" className="text-center py-12 text-slate-400">
-                  <History className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>No transactions yet</p>
-                  <p className="text-sm">Add budget to get started</p>
-                </td>
-              </tr>
-            ) : (
-              (unitTransactions[activeUnitHistoryModal] || []).map((tx) => (
-                <tr key={tx.id} className="border-b hover:bg-slate-50">
-                  <td className="px-6 py-3 text-slate-600">
-                    {formatRecordDateTime(tx.created_at)}
-                  </td>
-                  <td className="px-6 py-3">
-                    <Badge className={tx.type === 'ADDED' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
-                      {tx.type}
-                    </Badge>
-                  </td>
-                  <td className={`px-6 py-3 font-semibold ${tx.type === 'ADDED' ? 'text-green-600' : 'text-red-600'}`}>
-                    {tx.type === 'ADDED' ? '+' : '-'}₱{Number(tx.amount).toLocaleString()}
-                  </td>
-                  <td className="px-6 py-3 text-slate-600">{tx.description}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-      <div className="border-t p-4 bg-slate-50 rounded-b-xl">
-        <Button
-          onClick={() => setActiveUnitHistoryModal(null)}
-          variant="outline"
-          className="w-full"
-        >
-          Close
-        </Button>
-      </div>
-    </div>
-  </div>
-)}
+
+      {activeUnitBudgetModal && (
+        <AdminUnitAllocationModal
+          adjustmentType={unitBudgetAdjustmentType}
+          amount={unitBudgetAmount}
+          description={unitBudgetDesc}
+          onAmountChange={setUnitBudgetAmount}
+          onClose={closeUnitAllocationModal}
+          onDescriptionChange={setUnitBudgetDesc}
+          onSave={handleSaveUnitAllocation}
+          onTypeChange={setUnitBudgetAdjustmentType}
+          remaining={unitAllocationStats[activeUnitBudgetModal]?.remaining || 0}
+          unit={activeUnitBudgetModal}
+        />
+      )}
+
+      {activeUnitHistoryModal && (
+        <AdminUnitRecordsModal
+          entries={approvedEntriesByUnit[activeUnitHistoryModal] || []}
+          onClose={() => setActiveUnitHistoryModal(null)}
+          totalApproved={unitAllocationStats[activeUnitHistoryModal]?.approved || 0}
+          unit={activeUnitHistoryModal}
+        />
+      )}
 
       <Card className="overflow-hidden border-0 shadow-[0_10px_24px_rgba(15,23,42,0.08)] gap-0 py-0">
         <CardHeader className="border-b bg-white px-6 pt-5 pb-4">
