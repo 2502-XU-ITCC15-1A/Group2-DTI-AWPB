@@ -22,9 +22,44 @@ const ENTRY_SELECT = `
         sub_activities (name)
       `;
 
+const MONTH_NAMES = {
+  jan: 'January',
+  feb: 'February',
+  mar: 'March',
+  apr: 'April',
+  may: 'May',
+  jun: 'June',
+  jul: 'July',
+  aug: 'August',
+  sep: 'September',
+  oct: 'October',
+  nov: 'November',
+  dec: 'December'
+};
+
 function formatPersonName(profile) {
   if (!profile) return '';
   return profile.full_name || profile.username || '';
+}
+
+function buildMonthlyBreakdown(monthlyTargets = [], unitCost = 0) {
+  return (monthlyTargets || [])
+    .filter(mt => mt.target_quantity > 0)
+    .map(mt => ({
+      month: MONTH_NAMES[mt.month?.toLowerCase()] || mt.month,
+      target: mt.target_quantity,
+      amount: mt.target_quantity * (unitCost || 0)
+    }));
+}
+
+function buildMonthlyTargetRows(entryId, monthlyBreakdown = []) {
+  return (monthlyBreakdown || [])
+    .filter(month => Number(month.target || 0) > 0)
+    .map(month => ({
+      entry_id: entryId,
+      month: month.month.toLowerCase().slice(0, 3),
+      target_quantity: month.target,
+    }));
 }
 
 function isBlankClassification(value) {
@@ -209,21 +244,7 @@ export const usersService = {
 // Entry management services
 export const entriesService = {
   getMonthName(monthCode) {
-    const months = {
-      'jan': 'January',
-      'feb': 'February',
-      'mar': 'March',
-      'apr': 'April',
-      'may': 'May',
-      'jun': 'June',
-      'jul': 'July',
-      'aug': 'August',
-      'sep': 'September',
-      'oct': 'October',
-      'nov': 'November',
-      'dec': 'December'
-    };
-    return months[monthCode?.toLowerCase()] || monthCode;
+    return MONTH_NAMES[monthCode?.toLowerCase()] || monthCode;
   },
 
   transformEntryWithJoins(row, monthlyBreakdown = []) {
@@ -300,29 +321,31 @@ export const entriesService = {
       throw error;
     }
     
-    // For each entry, fetch its monthly targets
-    const entriesWithBreakdown = await Promise.all(
-      (data || []).map(async (row) => {
-        // Fetch monthly targets for this entry
-        const { data: monthlyTargets } = await supabase
-          .from('monthly_targets')
-          .select('month, target_quantity')
-          .eq('entry_id', row.id);
-        
-        // Build monthly breakdown
-        const monthlyBreakdown = (monthlyTargets || [])
-          .filter(mt => mt.target_quantity > 0)
-          .map(mt => ({
-            month: this.getMonthName(mt.month),
-            target: mt.target_quantity,
-            amount: mt.target_quantity * (row.unit_cost || 0)
-          }));
-        
-        return this.transformEntryWithJoins(row, monthlyBreakdown);
-      })
+    const entryIds = (data || []).map((row) => row.id);
+    let monthlyTargets = [];
+
+    if (entryIds.length > 0) {
+      const { data: targetsData, error: targetsError } = await supabase
+        .from('monthly_targets')
+        .select('entry_id, month, target_quantity')
+        .in('entry_id', entryIds);
+
+      if (targetsError) throw targetsError;
+      monthlyTargets = targetsData || [];
+    }
+
+    const targetsByEntryId = monthlyTargets.reduce((acc, target) => {
+      if (!acc[target.entry_id]) acc[target.entry_id] = [];
+      acc[target.entry_id].push(target);
+      return acc;
+    }, {});
+
+    return (data || []).map((row) =>
+      this.transformEntryWithJoins(
+        row,
+        buildMonthlyBreakdown(targetsByEntryId[row.id], row.unit_cost),
+      ),
     );
-    
-    return entriesWithBreakdown;
   },
 
   async getById(id) {
@@ -348,13 +371,7 @@ export const entriesService = {
       .select('month, target_quantity')
       .eq('entry_id', id);
     
-    const monthlyBreakdown = (monthlyTargets || [])
-      .filter(mt => mt.target_quantity > 0)
-      .map(mt => ({
-        month: this.getMonthName(mt.month),
-        target: mt.target_quantity,
-        amount: mt.target_quantity * (data.unit_cost || 0)
-      }));
+    const monthlyBreakdown = buildMonthlyBreakdown(monthlyTargets, data.unit_cost);
     
     return this.transformEntryWithJoins(data, monthlyBreakdown);
   },
@@ -486,25 +503,14 @@ export const entriesService = {
     
     // Insert monthly targets
     if (entryData.monthlyBreakdown && entryData.monthlyBreakdown.length > 0) {
-      console.log("Inserting monthly targets:", entryData.monthlyBreakdown);
-      
-      for (const month of entryData.monthlyBreakdown) {
-        if (month.target && month.target > 0) {
-          const monthName = month.month.toLowerCase().slice(0, 3);
-          console.log(`Inserting ${monthName}: ${month.target}`);
-          
-          const { error: mtError } = await supabase
-            .from('monthly_targets')
-            .insert({
-              entry_id: data.id,
-              month: monthName,
-              target_quantity: month.target,
-            });
-          
-          if (mtError) {
-            console.error(`Error inserting monthly target for ${monthName}:`, mtError);
-          }
-        }
+      const monthlyTargetRows = buildMonthlyTargetRows(data.id, entryData.monthlyBreakdown);
+
+      if (monthlyTargetRows.length > 0) {
+        const { error: mtError } = await supabase
+          .from('monthly_targets')
+          .insert(monthlyTargetRows);
+
+        if (mtError) throw mtError;
       }
     }
     
@@ -574,19 +580,13 @@ export const entriesService = {
     if (updates.monthlyBreakdown && updates.monthlyBreakdown.length > 0) {
       // Delete existing targets
       await supabase.from('monthly_targets').delete().eq('entry_id', id);
-      
-      // Insert new targets
-      for (const month of updates.monthlyBreakdown) {
-        if (month.target > 0) {
-          const monthName = month.month.toLowerCase().slice(0, 3);
-          await supabase
-            .from('monthly_targets')
-            .insert({
-              entry_id: id,
-              month: monthName,
-              target_quantity: month.target,
-            });
-        }
+
+      const monthlyTargetRows = buildMonthlyTargetRows(id, updates.monthlyBreakdown);
+      if (monthlyTargetRows.length > 0) {
+        const { error: mtError } = await supabase
+          .from('monthly_targets')
+          .insert(monthlyTargetRows);
+        if (mtError) throw mtError;
       }
     }
     
