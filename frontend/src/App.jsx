@@ -71,9 +71,9 @@ function App() {
   });
 
   useEffect(() => {
-    if (authLoading || !authUser || isRecoveryMode) return;
+    if (authLoading || !authUserId || isRecoveryMode) return;
     loadTemplate();
-  }, [authLoading, authUser, isRecoveryMode]);
+  }, [authLoading, authUserId, isRecoveryMode]);
 
 async function loadTemplate() {
   const { data, error } = await getTemplateHierarchy();
@@ -219,7 +219,7 @@ async function loadTemplate() {
   }, [authUserId, authUserRole]);
 
   useEffect(() => {
-    if (authLoading || !authUser || isRecoveryMode) return;
+    if (authLoading || !authUserId || isRecoveryMode) return;
 
     let cancelled = false;
 
@@ -245,10 +245,10 @@ async function loadTemplate() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, authUser, isRecoveryMode]);
+  }, [authLoading, authUserId, isRecoveryMode]);
 
   useEffect(() => {
-    if (authLoading || !authUser || isRecoveryMode) return;
+    if (authLoading || !authUserId || isRecoveryMode) return;
 
     let cancelled = false;
 
@@ -257,7 +257,7 @@ async function loadTemplate() {
       try {
         const entriesPromise = entriesService.getAll();
         const accountsPromise =
-          authUser.role === "admin" ? usersService.getAll() : Promise.resolve([]);
+          authUserRole === "admin" ? usersService.getAll() : Promise.resolve([]);
 
         const [entriesData, profiles] = await Promise.all([
           entriesPromise,
@@ -296,15 +296,19 @@ async function loadTemplate() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, authUser, isRecoveryMode]);
+  }, [authLoading, authUserId, authUserRole, isRecoveryMode]);
 
   useEffect(() => {
-    if (!authUser) return;
+    if (!authUserId) return;
 
     const subscription = realtimeService.subscribeToEntries((payload) => {
       const { eventType, new: newRecord, old: oldRecord } = payload;
       if (eventType === "INSERT") {
-        setEntries((prev) => [newRecord, ...prev]);
+        setEntries((prev) =>
+          prev.some((entry) => entry.id === newRecord.id)
+            ? prev.map((entry) => (entry.id === newRecord.id ? newRecord : entry))
+            : [newRecord, ...prev],
+        );
       } else if (eventType === "UPDATE") {
         setEntries((prev) => prev.map((entry) => (entry.id === newRecord.id ? newRecord : entry)));
       } else if (eventType === "DELETE") {
@@ -312,7 +316,7 @@ async function loadTemplate() {
       }
     });
     return () => subscription.unsubscribe();
-  }, [authUser]);
+  }, [authUserId]);
 
   const isAuthenticated = Boolean(authUser);
   const currentRole = authUser?.role || null;

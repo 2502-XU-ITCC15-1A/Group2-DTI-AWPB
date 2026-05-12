@@ -386,9 +386,7 @@ export const entriesService = {
 
   async create(entryData) {
     const { data: { user } } = await supabase.auth.getUser();
-    
-    console.log("=== CREATING ENTRY ===");
-    console.log("Entry data received:", entryData);
+    if (!user) throw new Error('You must be signed in to submit an entry.');
     
     const findUnitId = async (identifier) => {
       const lookupValues = getUnitLookupValues(identifier);
@@ -397,7 +395,7 @@ export const entriesService = {
         .select('id')
         .or(lookupValues.flatMap((value) => [`code.eq.${value}`, `name.eq.${value}`]).join(','))
         .maybeSingle();
-      if (error) console.error('Unit lookup error:', error);
+      if (error) throw error;
       return data?.id;
     };
     
@@ -440,15 +438,19 @@ export const entriesService = {
       return data?.id;
     };
     
-    // Get all IDs
-    const unitId = await findUnitId(entryData.unit);
-    const componentId = await findComponentId(entryData.component);
-    const subComponentId =
-      entryData.subComponentId || await findSubComponentId(entryData.subComponent);
-    const keyActivityId =
-      entryData.keyActivityId || await findKeyActivityId(entryData.keyActivity);
-    const subActivityId =
-      entryData.subActivityId || await findSubActivityId(entryData.subActivity);
+    const [
+      unitId,
+      componentId,
+      subComponentId,
+      keyActivityId,
+      subActivityId,
+    ] = await Promise.all([
+      entryData.unitId || findUnitId(entryData.unit),
+      entryData.componentId || findComponentId(entryData.component),
+      entryData.subComponentId || findSubComponentId(entryData.subComponent),
+      entryData.keyActivityId || findKeyActivityId(entryData.keyActivity),
+      entryData.subActivityId || findSubActivityId(entryData.subActivity),
+    ]);
     
     if (!unitId) throw new Error(`Unit not found: ${entryData.unit}`);
     if (!componentId) throw new Error(`Component not found: ${entryData.component}`);
@@ -476,8 +478,6 @@ export const entriesService = {
       performance_indicator: entryData.performanceIndicator || '',
     };
 
-    console.log("Insert data:", insertDataWithClassification);
-
     let insertResponse = await supabase
       .from('entries')
       .insert(insertDataWithClassification)
@@ -489,10 +489,6 @@ export const entriesService = {
       insertResponse.error?.message?.includes("'no'") ||
       insertResponse.error?.message?.includes('performance_indicator')
     ) {
-      console.warn(
-        'entries table does not expose no/performance_indicator columns; falling back to FK-only insert.',
-        insertResponse.error,
-      );
       insertResponse = await supabase
         .from('entries')
         .insert(insertData)
@@ -506,9 +502,7 @@ export const entriesService = {
       console.error('Error inserting entry:', error);
       throw new Error(`Failed to create entry: ${error.message}`);
     }
-    
-    console.log("Entry created with ID:", data.id);
-    
+
     // Insert monthly targets
     if (entryData.monthlyBreakdown && entryData.monthlyBreakdown.length > 0) {
       const monthlyTargetRows = buildMonthlyTargetRows(data.id, entryData.monthlyBreakdown);
@@ -521,15 +515,26 @@ export const entriesService = {
         if (mtError) throw mtError;
       }
     }
-    
-    const createdEntry = await this.getById(data.id);
+
+    const monthlyBreakdown = entryData.monthlyBreakdown || [];
+    const grandTotal =
+      entryData.grandTotal ??
+      monthlyBreakdown.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+
     return {
-      ...createdEntry,
-      // If the database schema cannot store these columns yet, preserve the
-      // submitted values for the immediate UI state after create.
-      no: createdEntry.no || entryData.no || '',
-      performanceIndicator:
-        createdEntry.performanceIndicator || entryData.performanceIndicator || '',
+      ...entryData,
+      id: data.id,
+      ownerId: data.owner_id,
+      planningYear: data.planning_year,
+      unitCost: Number(data.unit_cost) || 0,
+      status: data.status,
+      submittedAt: data.submission_date,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+      no: entryData.no || '',
+      performanceIndicator: entryData.performanceIndicator || '',
+      monthlyBreakdown,
+      grandTotal,
     };
   },
 
@@ -795,14 +800,6 @@ export const templateService = {
   }
 };
 
-// Template management services (admin only)
-function logTemplateMutation(action, payload, result) {
-  console.log(`[templateMgmtService.${action}]`, {
-    payload,
-    result,
-  });
-}
-
 function assertTemplateMutation(action, payload, result, error) {
   if (error) {
     console.error(`[templateMgmtService.${action}] Supabase error`, {
@@ -821,7 +818,6 @@ function assertTemplateMutation(action, payload, result, error) {
     throw missingResultError;
   }
 
-  logTemplateMutation(action, payload, result);
   return result;
 }
 
@@ -910,21 +906,6 @@ async function getSubActivityRowByName({
   return data || [];
 }
 
-function getSupabaseDebugInfo() {
-  const url = import.meta.env.VITE_SUPABASE_URL || "";
-  let host = "missing-url";
-  try {
-    host = new URL(url).host;
-  } catch {
-    host = url || "missing-url";
-  }
-
-  return {
-    urlHost: host,
-    hasAnonKey: Boolean(import.meta.env.VITE_SUPABASE_ANON_KEY),
-  };
-}
-
 async function probeSubActivitySchema() {
   const keyActivityProbe = await supabase
     .from('sub_activities')
@@ -935,15 +916,12 @@ async function probeSubActivitySchema() {
     .select('id, performance_indicator_id')
     .limit(1);
 
-  const schema = {
+  return {
     hasKeyActivityId: !keyActivityProbe.error,
     hasPerformanceIndicatorId: !performanceIndicatorProbe.error,
     keyActivityProbeError: keyActivityProbe.error || null,
     performanceIndicatorProbeError: performanceIndicatorProbe.error || null,
   };
-
-  console.log('[templateMgmtService.createSubActivity] sub_activities schema probe', schema);
-  return schema;
 }
 
 async function verifySavedSubActivity(row, payload) {
@@ -984,7 +962,6 @@ async function verifySavedSubActivity(row, payload) {
     throw error;
   }
 
-  console.log('[templateMgmtService.createSubActivity] Verified saved row', response.data);
   return response.data;
 }
 
@@ -1148,11 +1125,6 @@ export const templateMgmtService = {
   },
 
   async createSubActivity(data) {
-    console.log('[templateMgmtService.createSubActivity] Starting insert', {
-      supabase: getSupabaseDebugInfo(),
-      input: data,
-    });
-
     const schema = await probeSubActivitySchema();
     const shouldUseKeyActivityId =
       schema.hasKeyActivityId || !schema.hasPerformanceIndicatorId;
@@ -1167,25 +1139,11 @@ export const templateMgmtService = {
       is_active: data.is_active ?? true
     });
 
-    console.log('[templateMgmtService.createSubActivity] Insert payload', {
-      table: 'sub_activities',
-      payload,
-      schema,
-      supabase: getSupabaseDebugInfo(),
-    });
-
     const response = await supabase
       .from('sub_activities')
       .insert(payload)
       .select()
       .single();
-
-    console.log('[templateMgmtService.createSubActivity] Raw insert response', {
-      data: response.data,
-      error: response.error,
-      status: response.status,
-      statusText: response.statusText,
-    });
 
     if (!response.error) {
       const savedRow = assertTemplateMutation('createSubActivity', payload, response.data, response.error);
@@ -1220,25 +1178,11 @@ export const templateMgmtService = {
       is_active: data.is_active ?? true
     });
 
-    console.log('[templateMgmtService.createSubActivity] Fallback insert payload', {
-      fallbackPayload,
-      reason: {
-        shouldFallbackToKeyActivity,
-        shouldFallbackToPerformanceIndicator,
-        firstError: response.error,
-      },
-      supabase: getSupabaseDebugInfo(),
-    });
-
     const { data: result, error } = await supabase
       .from('sub_activities')
       .insert(fallbackPayload)
       .select()
       .single();
-    console.log('[templateMgmtService.createSubActivity] Fallback raw response', {
-      data: result,
-      error,
-    });
     if (error) {
       console.error('[templateMgmtService.createSubActivity] Fallback insert failed', {
         fallbackPayload,
