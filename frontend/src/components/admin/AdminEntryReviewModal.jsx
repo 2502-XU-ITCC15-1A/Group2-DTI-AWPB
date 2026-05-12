@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 
 function formatCurrency(value) {
   return new Intl.NumberFormat("en-PH", {
@@ -36,6 +36,15 @@ function getStatusClasses(status) {
   }
 }
 
+function getPersonName(entry, prefix) {
+  return (
+    entry?.[`${prefix}DisplayName`] ||
+    entry?.[`${prefix}FullName`] ||
+    entry?.[`${prefix}Username`] ||
+    "N/A"
+  )
+}
+
 export default function AdminEntryReviewModal({
   entry,
   onClose,
@@ -44,15 +53,31 @@ export default function AdminEntryReviewModal({
   onReject,
   onGenerateApprovedEntry,
 }) {
-  const [reviewNote, setReviewNote] = useState("")
-  const [reviewError, setReviewError] = useState("")
-
-  useEffect(() => {
-    setReviewNote(entry?.adminComment || "")
-    setReviewError("")
-  }, [entry])
-
   if (!entry) return null
+
+  return (
+    <AdminEntryReviewModalContent
+      key={entry.id}
+      entry={entry}
+      onApprove={onApprove}
+      onClose={onClose}
+      onGenerateApprovedEntry={onGenerateApprovedEntry}
+      onReject={onReject}
+      onReturn={onReturn}
+    />
+  )
+}
+
+function AdminEntryReviewModalContent({
+  entry,
+  onClose,
+  onApprove,
+  onReturn,
+  onReject,
+  onGenerateApprovedEntry,
+}) {
+  const [reviewNote, setReviewNote] = useState(entry?.adminComment || "")
+  const [reviewError, setReviewError] = useState("")
 
   const handleReturn = () => {
     if (!reviewNote.trim()) {
@@ -112,8 +137,13 @@ export default function AdminEntryReviewModal({
             <div>
               <h3 className="text-lg font-semibold">{entry.titleOfActivities}</h3>
               <p className="text-sm text-gray-500">
-                Submitted on {formatDate(entry.submittedAt)}
+                Submitted by {getPersonName(entry, "owner")} on {formatDate(entry.submittedAt)}
               </p>
+              {entry.reviewedAt && (
+                <p className="mt-1 text-sm text-gray-500">
+                  Reviewed by {getPersonName(entry, "reviewer")} on {formatDate(entry.reviewedAt)}
+                </p>
+              )}
             </div>
 
             <span
@@ -147,6 +177,8 @@ export default function AdminEntryReviewModal({
               <div className="space-y-2 text-sm">
                 <p><span className="font-medium">Unit Cost:</span> {formatCurrency(entry.unitCost)}</p>
                 <p><span className="font-medium">Grand Total:</span> {formatCurrency(entry.grandTotal)}</p>
+                <p><span className="font-medium">Submitted By:</span> {getPersonName(entry, "owner")}</p>
+                <p><span className="font-medium">Reviewed By:</span> {entry.reviewedAt ? getPersonName(entry, "reviewer") : "N/A"}</p>
               </div>
             </div>
           </div>

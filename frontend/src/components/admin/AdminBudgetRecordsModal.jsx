@@ -24,6 +24,19 @@ function formatCurrency(value) {
   });
 }
 
+function getEntryPersonName(entry, prefix) {
+  return (
+    entry?.[`${prefix}DisplayName`] ||
+    entry?.[`${prefix}FullName`] ||
+    entry?.[`${prefix}Username`] ||
+    "N/A"
+  );
+}
+
+function getTransactionActorName(tx) {
+  return tx.actor?.full_name || tx.actor?.username || "N/A";
+}
+
 export default function AdminBudgetRecordsModal({
   approvedEntries = [],
   onClose,
@@ -69,6 +82,7 @@ export default function AdminBudgetRecordsModal({
             {tx.type === "ADDED" ? "+" : "-"}₱
             {Number(tx.amount).toLocaleString()}
           </td>
+          <td className="px-6 py-3 text-slate-600">{getTransactionActorName(tx)}</td>
           <td className="px-6 py-3 text-slate-600">{tx.description}</td>
         </tr>
       )),
@@ -96,6 +110,12 @@ export default function AdminBudgetRecordsModal({
           </td>
           <td className="px-5 py-3 text-slate-600">
             {entry.submittedAt ? new Date(entry.submittedAt).toLocaleDateString() : "-"}
+          </td>
+          <td className="px-5 py-3 text-slate-600">
+            {getEntryPersonName(entry, "owner")}
+          </td>
+          <td className="px-5 py-3 text-slate-600">
+            {entry.reviewedAt ? getEntryPersonName(entry, "reviewer") : "N/A"}
           </td>
           <td className="px-5 py-3 font-semibold text-red-600">
             ₱{formatCurrency(entry.grandTotal)}
@@ -164,6 +184,7 @@ export default function AdminBudgetRecordsModal({
                 <col className="w-[140px]" />
                 <col className="w-[140px]" />
                 <col className="w-[150px]" />
+                <col className="w-[180px]" />
                 <col />
               </colgroup>
               <thead className="sticky top-0 bg-slate-50">
@@ -174,6 +195,7 @@ export default function AdminBudgetRecordsModal({
                   <th className="px-6 py-3 text-center font-semibold text-slate-700">Unit</th>
                   <th className="px-6 py-3 text-center font-semibold text-slate-700">Type</th>
                   <th className="px-6 py-3 text-left font-semibold text-slate-700">Amount</th>
+                  <th className="px-6 py-3 text-left font-semibold text-slate-700">Edited By</th>
                   <th className="px-6 py-3 text-left font-semibold text-slate-700">
                     Description
                   </th>
@@ -182,7 +204,7 @@ export default function AdminBudgetRecordsModal({
               <tbody>
                 {transactions.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="py-12 text-center text-slate-400">
+                    <td colSpan="6" className="py-12 text-center text-slate-400">
                       <History className="mx-auto mb-3 h-12 w-12 opacity-50" />
                       <p>No transactions yet</p>
                       <p className="text-sm">Edit a unit allocation to start a ledger.</p>
@@ -201,6 +223,8 @@ export default function AdminBudgetRecordsModal({
                 <col className="w-[130px]" />
                 <col className="w-[110px]" />
                 <col className="w-[170px]" />
+                <col className="w-[180px]" />
+                <col className="w-[180px]" />
                 <col className="w-[150px]" />
               </colgroup>
               <thead className="sticky top-0 bg-slate-50">
@@ -214,13 +238,19 @@ export default function AdminBudgetRecordsModal({
                   <th className="px-5 py-3 text-left font-semibold text-slate-700">
                     Date Submitted
                   </th>
+                  <th className="px-5 py-3 text-left font-semibold text-slate-700">
+                    Submitted By
+                  </th>
+                  <th className="px-5 py-3 text-left font-semibold text-slate-700">
+                    Approved By
+                  </th>
                   <th className="px-5 py-3 text-left font-semibold text-slate-700">Total</th>
                 </tr>
               </thead>
               <tbody>
                 {approvedEntries.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="py-12 text-center text-slate-400">
+                    <td colSpan="8" className="py-12 text-center text-slate-400">
                       <History className="mx-auto mb-3 h-12 w-12 opacity-50" />
                       <p>No approved entries yet</p>
                     </td>

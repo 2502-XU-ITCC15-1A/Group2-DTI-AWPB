@@ -74,6 +74,7 @@ const gradientButtonClass =
   "border-0 bg-gradient-to-r from-[#1f2f74] to-[#2a4694] text-white shadow-[0_6px_16px_rgba(31,47,116,0.28)] transition-all duration-200 hover:from-[#19265f] hover:to-[#213a80] hover:shadow-[0_10px_24px_rgba(31,47,116,0.38)]";
 
 export default function AdminReview({
+  currentUser,
   entries: entriesProp = [],
   onUpdateEntry,
   onDeleteEntry,
@@ -99,6 +100,7 @@ export default function AdminReview({
   const [unitBudgetAdjustmentType, setUnitBudgetAdjustmentType] = useState("ADDED");
 
   const entries = entriesProp;
+  const currentAdminId = currentUser?.id || null;
 
   const approvedEntries = useMemo(() => {
     return entries.filter((e) => isApprovedStatus(e.status));
@@ -180,13 +182,20 @@ export default function AdminReview({
   const persistEntryUpdate = async (entryId, uiUpdates, successToast) => {
     const dbUpdates = {
       status: uiUpdates.status,
-      reviewer_notes: uiUpdates.adminComment ?? "",
-      review_date: uiUpdates.reviewedAt,
+      adminComment: uiUpdates.adminComment ?? "",
+      reviewedAt: uiUpdates.reviewedAt,
+      reviewerId: currentAdminId,
     };
 
     try {
       await entriesService.update(entryId, dbUpdates);
-      onUpdateEntry?.(entryId, uiUpdates);
+      onUpdateEntry?.(entryId, {
+        ...uiUpdates,
+        reviewerId: currentAdminId,
+        reviewerUsername: currentUser?.username || "",
+        reviewerFullName: currentUser?.fullName || "",
+        reviewerDisplayName: currentUser?.fullName || currentUser?.username || "",
+      });
       onShowToast?.(successToast);
       setSelectedEntry(null);
     } catch (err) {
@@ -197,6 +206,22 @@ export default function AdminReview({
         type: "error",
       });
     }
+  };
+
+  const insertBudgetTransaction = async (transaction) => {
+    const payload = {
+      ...transaction,
+      actor_id: currentAdminId,
+    };
+
+    let { error } = await supabase.from("budget_transactions").insert(payload);
+    if (error?.message?.includes("actor_id") || error?.code === "PGRST204") {
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.actor_id;
+      const fallback = await supabase.from("budget_transactions").insert(fallbackPayload);
+      error = fallback.error;
+    }
+    if (error) throw error;
   };
 
   const handleApprove = async (note) => {
@@ -216,14 +241,12 @@ export default function AdminReview({
   }
   
   try {
-    const { error: txError } = await supabase.from("budget_transactions").insert({
+    await insertBudgetTransaction({
       amount: entryAmount,
       type: 'DEDUCTED',
       description: `Approved: ${entryTitle}`,
       unit: entryUnit,
     });
-
-    if (txError) throw txError;
     
     await persistEntryUpdate(
       selectedEntry.id,
@@ -289,14 +312,12 @@ export default function AdminReview({
   
 const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, newStatus, entryUnit) => {
   try {
-    const { error } = await supabase.from("budget_transactions").insert({
+    await insertBudgetTransaction({
       amount: amount,
       type: 'ADDED',
       description: `REVERSAL: "${entryTitle}" changed from ${oldStatus} → ${newStatus}`,
       unit: normalizeUnitCode(entryUnit) || null,
     });
-    
-    if (error) throw error;
     
     onShowToast?.({
       title: "Allocation restored",
@@ -415,10 +436,19 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
   //connects sa supabase
   const loadBudgetData = async () => {
     try {
-      const {data: txData, error: txError} = await supabase
+      let {data: txData, error: txError} = await supabase
         .from("budget_transactions")
-        .select("*")
+        .select("*, actor:profiles!actor_id(username, full_name)")
         .order("created_at", { ascending: false });
+
+      if (txError?.message?.includes("actor_id") || txError?.message?.includes("relationship")) {
+        const fallback = await supabase
+          .from("budget_transactions")
+          .select("*")
+          .order("created_at", { ascending: false });
+        txData = fallback.data;
+        txError = fallback.error;
+      }
 
       if (txError) throw txError;
 
@@ -483,7 +513,7 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
     }
 
     try {
-      const { error } = await supabase.from("budget_transactions").insert({
+      await insertBudgetTransaction({
         amount: amount,
         type: unitBudgetAdjustmentType,
         description:
@@ -493,8 +523,6 @@ const reverseBudgetDeduction = async (entryId, entryTitle, amount, oldStatus, ne
             : `Allocation reduction for ${unit}`),
         unit: normalizeUnitCode(unit),
       });
-
-      if (error) throw error;
       await loadBudgetData();
       closeUnitAllocationModal();
       onShowToast({

@@ -124,7 +124,7 @@ async function loadTemplate() {
             status: profile.status,
           });
         }
-      } catch (err) {
+      } catch {
         // No active session — stay on login
       } finally {
         if (!cancelled) setAuthLoading(false);
@@ -354,7 +354,7 @@ async function loadTemplate() {
         status: profile.status,
       }));
       setAccounts(formattedAccounts);
-    } catch (err) {
+    } catch {
       // Fallback: just add to local state
       setAccounts((prev) => [newAccount, ...prev]);
     }
@@ -493,7 +493,7 @@ async function loadTemplate() {
         <Route path="/submit" element={currentRole === "encoder" ? <SubmitEntry onAddEntry={handleAddEntry} entryToEdit={entryBeingEdited} onSaveEditedEntry={handleSaveEditedEntry} clearEditingEntry={clearEditingEntry} submissionWindow={submissionWindow} draftState={submitEntryDraft} onDraftChange={setSubmitEntryDraft} onClearDraft={clearSubmitEntryDraft} currentUser={authUser} templateData={templateData} /> : <Navigate to="/admin/dashboard" replace />} />
         <Route path="/admin/manage-template" element={currentRole === "admin" ? <ManageTemplate templateData={templateData} onUpdateTemplateData={setTemplateData} onResetTemplate={() => setTemplateData(createInitialTemplateState())} onShowToast={showToast} /> : <Navigate to="/" replace />} />
         <Route path="/admin/dashboard" element={currentRole === "admin" ? <AdminDashboard entries={entries} submissionWindow={submissionWindow} onUpdateSubmissionWindow={handleUpdateSubmissionWindow} /> : <Navigate to="/" replace />} />
-        <Route path="/admin/review" element={currentRole === "admin" ? <AdminReview entries={entries} onUpdateEntry={handleUpdateEntry} onDeleteEntry={handleDeleteEntry} onShowToast={showToast} /> : <Navigate to="/" replace />} />
+        <Route path="/admin/review" element={currentRole === "admin" ? <AdminReview entries={entries} currentUser={authUser} onUpdateEntry={handleUpdateEntry} onDeleteEntry={handleDeleteEntry} onShowToast={showToast} /> : <Navigate to="/" replace />} />
         <Route path="/admin/manage-accounts" element={currentRole === "admin" ? <ManageAccounts accounts={accounts} onUpdateAccount={handleUpdateAccount} onShowToast={showToast} /> : <Navigate to="/" replace />} />
         <Route path="/admin/manage-accounts/new" element={currentRole === "admin" ? <AddNewAccount accounts={accounts} onAddAccount={handleAddAccount} onShowToast={showToast} /> : <Navigate to="/" replace />} />
       </Routes>

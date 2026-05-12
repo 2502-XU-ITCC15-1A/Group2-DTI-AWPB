@@ -18,6 +18,15 @@ function formatDate(value) {
   });
 }
 
+function getPersonName(entry, prefix) {
+  return (
+    entry?.[`${prefix}DisplayName`] ||
+    entry?.[`${prefix}FullName`] ||
+    entry?.[`${prefix}Username`] ||
+    "N/A"
+  );
+}
+
 export default function AdminUnitRecordsModal({
   entries = [],
   onClose,
@@ -62,6 +71,8 @@ export default function AdminUnitRecordsModal({
               <col />
               <col className="w-[110px]" />
               <col className="w-[150px]" />
+              <col className="w-[170px]" />
+              <col className="w-[170px]" />
               <col className="w-[165px]" />
             </colgroup>
             <thead className="sticky top-0 bg-slate-50">
@@ -69,13 +80,15 @@ export default function AdminUnitRecordsModal({
                 <th className="px-5 py-3 text-left font-semibold text-slate-700">Title</th>
                 <th className="px-5 py-3 text-center font-semibold text-slate-700">No.</th>
                 <th className="px-5 py-3 text-left font-semibold text-slate-700">Submitted</th>
+                <th className="px-5 py-3 text-left font-semibold text-slate-700">Submitted By</th>
+                <th className="px-5 py-3 text-left font-semibold text-slate-700">Approved By</th>
                 <th className="px-5 py-3 text-left font-semibold text-slate-700">Amount</th>
               </tr>
             </thead>
             <tbody>
               {entries.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="py-12 text-center text-slate-400">
+                  <td colSpan="6" className="py-12 text-center text-slate-400">
                     <History className="mx-auto mb-3 h-12 w-12 opacity-50" />
                     <p>No approved entries yet</p>
                     <p className="text-sm">Approved entries for {unit} will appear here.</p>
@@ -95,6 +108,12 @@ export default function AdminUnitRecordsModal({
                     </td>
                     <td className="px-5 py-3 text-slate-600">
                       {formatDate(entry.submittedAt)}
+                    </td>
+                    <td className="px-5 py-3 text-slate-600">
+                      {getPersonName(entry, "owner")}
+                    </td>
+                    <td className="px-5 py-3 text-slate-600">
+                      {entry.reviewedAt ? getPersonName(entry, "reviewer") : "N/A"}
                     </td>
                     <td className="px-5 py-3 font-semibold text-red-600">
                       ₱{formatCurrency(entry.grandTotal)}

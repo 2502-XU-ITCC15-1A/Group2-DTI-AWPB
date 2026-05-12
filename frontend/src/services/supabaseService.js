@@ -1,6 +1,32 @@
 import { supabase } from '../lib/supabase';
 import { getUnitLookupValues, normalizeUnitCode } from '../lib/units';
 
+const ENTRY_SELECT_WITH_REVIEWER = `
+        *,
+        profiles!owner_id (username, full_name),
+        reviewer:profiles!reviewer_id (username, full_name),
+        units (name, code),
+        components (name),
+        sub_components (name),
+        key_activities (name, activity_no, performance_indicator),
+        sub_activities (name)
+      `;
+
+const ENTRY_SELECT = `
+        *,
+        profiles!owner_id (username, full_name),
+        units (name, code),
+        components (name),
+        sub_components (name),
+        key_activities (name, activity_no, performance_indicator),
+        sub_activities (name)
+      `;
+
+function formatPersonName(profile) {
+  if (!profile) return '';
+  return profile.full_name || profile.username || '';
+}
+
 // Authentication services
 export const authService = {
   async signUp(email, password, metadata = {}) {
@@ -175,6 +201,11 @@ export const entriesService = {
       ownerId: row.owner_id,
       ownerUsername: row.profiles?.username || '',
       ownerFullName: row.profiles?.full_name || '',
+      ownerDisplayName: formatPersonName(row.profiles),
+      reviewerId: row.reviewer_id || '',
+      reviewerUsername: row.reviewer?.username || '',
+      reviewerFullName: row.reviewer?.full_name || '',
+      reviewerDisplayName: formatPersonName(row.reviewer),
       planningYear: row.planning_year,
       unit: normalizeUnitCode(row.units?.code || row.units?.name || ''),
       component: row.components?.name || '',
@@ -194,7 +225,7 @@ export const entriesService = {
       monthlyBreakdown: monthlyBreakdown,
       grandTotal: grandTotal,
       status: row.status,
-      adminComment: row.reviewer_notes || '',
+      adminComment: row.admin_comment || row.reviewer_notes || '',
       submittedAt: row.submission_date,
       reviewedAt: row.review_date,
       createdAt: row.created_at,
@@ -207,15 +238,7 @@ export const entriesService = {
     
     let query = supabase
       .from('entries')
-      .select(`
-        *,
-        profiles!owner_id (username, full_name),
-        units (name, code),
-        components (name),
-        sub_components (name),
-        key_activities (name, activity_no, performance_indicator),
-        sub_activities (name)
-      `)
+      .select(ENTRY_SELECT_WITH_REVIEWER)
       .order('created_at', { ascending: false });
 
     const profile = await authService.getProfile(user.id);
@@ -223,7 +246,19 @@ export const entriesService = {
       query = query.eq('owner_id', user.id);
     }
 
-    const { data, error } = await query;
+    let { data, error } = await query;
+    if (error?.message?.includes('reviewer_id') || error?.message?.includes('relationship')) {
+      let fallbackQuery = supabase
+        .from('entries')
+        .select(ENTRY_SELECT)
+        .order('created_at', { ascending: false });
+      if (profile.role !== 'admin') {
+        fallbackQuery = fallbackQuery.eq('owner_id', user.id);
+      }
+      const fallback = await fallbackQuery;
+      data = fallback.data;
+      error = fallback.error;
+    }
     if (error) {
       console.error('Error getting entries:', error);
       throw error;
@@ -255,19 +290,20 @@ export const entriesService = {
   },
 
   async getById(id) {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('entries')
-      .select(`
-        *,
-        profiles!owner_id (username, full_name),
-        units (name, code),
-        components (name),
-        sub_components (name),
-        key_activities (name, activity_no, performance_indicator),
-        sub_activities (name)
-      `)
+      .select(ENTRY_SELECT_WITH_REVIEWER)
       .eq('id', id)
       .single();
+    if (error?.message?.includes('reviewer_id') || error?.message?.includes('relationship')) {
+      const fallback = await supabase
+        .from('entries')
+        .select(ENTRY_SELECT)
+        .eq('id', id)
+        .single();
+      data = fallback.data;
+      error = fallback.error;
+    }
     if (error) throw error;
     
     // Fetch monthly targets for this entry
@@ -458,9 +494,14 @@ export const entriesService = {
     
     if (updates.status !== undefined) dbUpdates.status = updates.status;
     if (updates.review_date !== undefined) dbUpdates.review_date = updates.review_date;
+    if (updates.reviewedAt !== undefined) dbUpdates.review_date = updates.reviewedAt;
+    if (updates.reviewerId !== undefined) dbUpdates.reviewer_id = updates.reviewerId;
+    if (updates.reviewer_id !== undefined) dbUpdates.reviewer_id = updates.reviewer_id;
     if (updates.titleOfActivities !== undefined) dbUpdates.title_of_activities = updates.titleOfActivities;
     if (updates.unitCost !== undefined) dbUpdates.unit_cost = updates.unitCost;
-    if (updates.adminComment !== undefined) dbUpdates.reviewer_notes = updates.adminComment;
+    if (updates.adminComment !== undefined) dbUpdates.admin_comment = updates.adminComment;
+    if (updates.reviewer_notes !== undefined) dbUpdates.admin_comment = updates.reviewer_notes;
+    if (updates.admin_comment !== undefined) dbUpdates.admin_comment = updates.admin_comment;
     if (updates.no !== undefined) dbUpdates.no = updates.no;
     if (updates.performanceIndicator !== undefined) dbUpdates.performance_indicator = updates.performanceIndicator;
     
@@ -473,11 +514,20 @@ export const entriesService = {
       if (
         response.error?.code === 'PGRST204' ||
         response.error?.message?.includes("'no'") ||
-        response.error?.message?.includes('performance_indicator')
+        response.error?.message?.includes('performance_indicator') ||
+        response.error?.message?.includes('admin_comment') ||
+        response.error?.message?.includes('reviewer_id')
       ) {
+        const shouldUseReviewerNotes =
+          response.error?.message?.includes('admin_comment');
         const fallbackUpdates = { ...dbUpdates };
         delete fallbackUpdates.no;
         delete fallbackUpdates.performance_indicator;
+        delete fallbackUpdates.reviewer_id;
+        if (shouldUseReviewerNotes && fallbackUpdates.admin_comment !== undefined) {
+          fallbackUpdates.reviewer_notes = fallbackUpdates.admin_comment;
+          delete fallbackUpdates.admin_comment;
+        }
         response = await supabase
           .from('entries')
           .update(fallbackUpdates)

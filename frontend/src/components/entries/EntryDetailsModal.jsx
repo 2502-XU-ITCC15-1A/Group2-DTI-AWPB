@@ -34,6 +34,15 @@ function getStatusClasses(status) {
   }
 }
 
+function getPersonName(entry, prefix) {
+  return (
+    entry?.[`${prefix}DisplayName`] ||
+    entry?.[`${prefix}FullName`] ||
+    entry?.[`${prefix}Username`] ||
+    "N/A"
+  )
+}
+
 export default function EntryDetailsModal({ entry, onClose, onExportToPdf }) {
   if (!entry) return null
 
@@ -74,8 +83,13 @@ export default function EntryDetailsModal({ entry, onClose, onExportToPdf }) {
             <div>
               <h3 className="text-lg font-semibold">{entry.titleOfActivities}</h3>
               <p className="text-sm text-gray-500">
-                Submitted on {formatDate(entry.submittedAt)}
+                Submitted by {getPersonName(entry, "owner")} on {formatDate(entry.submittedAt)}
               </p>
+              {entry.reviewedAt && (
+                <p className="mt-1 text-sm text-gray-500">
+                  Reviewed by {getPersonName(entry, "reviewer")} on {formatDate(entry.reviewedAt)}
+                </p>
+              )}
             </div>
 
             <span
@@ -137,6 +151,8 @@ export default function EntryDetailsModal({ entry, onClose, onExportToPdf }) {
                     : "None"}
                 </p>
                 <p><span className="font-medium">Grand Total:</span> {formatCurrency(entry.grandTotal)}</p>
+                <p><span className="font-medium">Submitted By:</span> {getPersonName(entry, "owner")}</p>
+                <p><span className="font-medium">Reviewed By:</span> {entry.reviewedAt ? getPersonName(entry, "reviewer") : "N/A"}</p>
               </div>
             </div>
           </div>
