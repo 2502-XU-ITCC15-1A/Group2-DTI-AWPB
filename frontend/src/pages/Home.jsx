@@ -164,7 +164,7 @@ export default function Home({ entries = [], submissionWindow }) {
               <p
                 className={`text-base font-semibold ${windowOpen ? "text-white" : "text-rose-900"}`}
               >
-                Encoding Period {windowOpen ? "Open" : "Closed"}
+                Submission Period {windowOpen ? "Open" : "Closed"}
               </p>
 
               <p

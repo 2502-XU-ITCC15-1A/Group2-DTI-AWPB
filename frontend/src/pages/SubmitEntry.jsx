@@ -1485,7 +1485,7 @@ export default function SubmitEntry({
                         isPlanningStatsLoading || isPlanningStatsUnavailable || !hasPlanningEstimate
                           ? "border-white/35 bg-white/15 text-white"
                           : estimateGapAfterEntry < 0
-                          ? "border-red-300 bg-white/40 text-red-800"
+                          ? "border-rose-300 bg-rose-50 text-rose-800"
                           : "border-white/40 bg-white/20 text-white"
                       }`}
                     >

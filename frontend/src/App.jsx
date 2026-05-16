@@ -19,8 +19,18 @@ const INITIAL_ACCOUNTS = [];
 const ADMIN_VIEW_STORAGE_KEY = "awpb_admin_active_view";
 const SESSION_EXPIRES_AT_STORAGE_KEY = "awpb_session_expires_at";
 const SESSION_TIMEOUT_MS = 10 * 60 * 1000;
+const SESSION_ACTIVITY_REFRESH_THROTTLE_MS = 15 * 1000;
+const SESSION_ACTIVITY_EVENTS = [
+  "click",
+  "keydown",
+  "pointerdown",
+  "pointermove",
+  "scroll",
+  "touchstart",
+  "wheel",
+];
 const SESSION_TIMEOUT_NOTICE =
-  "Your session expired after 10 minutes. Please sign in again.";
+  "Your session expired after 10 minutes of inactivity. Please sign in again.";
 
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ConfirmPassword = lazy(() => import("./pages/ConfirmPassword"));
@@ -273,6 +283,7 @@ async function loadTemplate() {
     if (!authUserId || isRecoveryMode) return;
 
     let timeoutId;
+    let lastActivityRefresh = 0;
 
     const scheduleExpirationCheck = () => {
       window.clearTimeout(timeoutId);
@@ -293,6 +304,22 @@ async function loadTemplate() {
       }, remainingMs);
     };
 
+    const refreshSessionActivity = () => {
+      if (sessionExpiredRef.current || document.visibilityState === "hidden") return;
+
+      const now = Date.now();
+      if (hasSessionExpired(now)) {
+        void expireSession();
+        return;
+      }
+
+      if (now - lastActivityRefresh < SESSION_ACTIVITY_REFRESH_THROTTLE_MS) return;
+
+      lastActivityRefresh = now;
+      startSessionExpiration(now);
+      scheduleExpirationCheck();
+    };
+
     const handleVisibilityChange = () => {
       if (document.visibilityState !== "visible") return;
       if (hasSessionExpired()) {
@@ -300,7 +327,7 @@ async function loadTemplate() {
         return;
       }
 
-      scheduleExpirationCheck();
+      refreshSessionActivity();
     };
 
     const handleExpirationStorageChange = (event) => {
@@ -321,11 +348,19 @@ async function loadTemplate() {
 
     scheduleExpirationCheck();
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", refreshSessionActivity);
+    SESSION_ACTIVITY_EVENTS.forEach((eventName) => {
+      window.addEventListener(eventName, refreshSessionActivity, { passive: true });
+    });
     window.addEventListener("storage", handleExpirationStorageChange);
 
     return () => {
       window.clearTimeout(timeoutId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", refreshSessionActivity);
+      SESSION_ACTIVITY_EVENTS.forEach((eventName) => {
+        window.removeEventListener(eventName, refreshSessionActivity);
+      });
       window.removeEventListener("storage", handleExpirationStorageChange);
     };
   }, [authUserId, expireSession, isRecoveryMode]);
