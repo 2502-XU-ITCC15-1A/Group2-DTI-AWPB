@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search, Eye, Trash2, History, Pencil } from "lucide-react";
 
 import AdminEntryReviewModal from "../components/admin/AdminEntryReviewModal";
@@ -8,7 +8,7 @@ import AdminUnitAllocationModal from "../components/admin/AdminUnitAllocationMod
 import AdminUnitRecordsModal from "../components/admin/AdminUnitRecordsModal";
 
 import { supabase } from "../lib/supabase";
-import { entriesService } from "../services/supabaseService";
+import { budgetPlanningService, entriesService } from "../services/supabaseService";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -101,7 +101,9 @@ export default function AdminReview({
   const [totalBudget, setTotalBudget] = useState(0);
   const [transactions, setTransactions] = useState([]);
   const [budgetDataStatus, setBudgetDataStatus] = useState("loading");
+  const [transactionsStatus, setTransactionsStatus] = useState("idle");
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const budgetDataReadyRef = useRef(false);
 
   // Unit-specific budget state
   const UNITS = UNIT_CODES;
@@ -168,14 +170,15 @@ export default function AdminReview({
   const totalPlanningEstimate = totalBudget;
   const totalVariance = totalPlanningEstimate - totalApprovedBudget;
   const isBudgetDataLoading = budgetDataStatus === "loading";
+  const isBudgetDataRefreshing = budgetDataStatus === "refreshing";
   const isBudgetDataUnavailable = budgetDataStatus === "unavailable";
   const planningEstimateLabel = isBudgetDataLoading
-    ? "Loading..."
+    ? "Syncing..."
     : isBudgetDataUnavailable
       ? "Unavailable"
       : formatCurrency(totalPlanningEstimate);
   const planningBalanceLabel = isBudgetDataLoading
-    ? "Loading..."
+    ? "Syncing..."
     : isBudgetDataUnavailable
       ? "Unavailable"
       : formatPlanningBalance(totalVariance);
@@ -248,7 +251,12 @@ export default function AdminReview({
 
     const { error } = await supabase.from("budget_transactions").insert(payload);
     if (error) throw error;
+    setTransactionsStatus("idle");
   };
+
+  const invalidateBudgetRecords = useCallback(() => {
+    setTransactionsStatus("idle");
+  }, []);
 
   const handleApprove = async (note) => {
     if (!selectedEntry || reviewActionBusy) return;
@@ -279,8 +287,9 @@ export default function AdminReview({
       await replaceEntryFromDatabase(selectedEntry.id).catch((refreshError) => {
         console.error("Failed to refresh approved entry:", refreshError);
       });
-      await loadBudgetData().catch((refreshError) => {
-        console.error("Failed to refresh budget data after approval:", refreshError);
+      invalidateBudgetRecords();
+      await loadPlanningData().catch((refreshError) => {
+        console.error("Failed to refresh planning data after approval:", refreshError);
       });
       setSelectedEntry(null);
       onShowToast?.({
@@ -295,7 +304,8 @@ export default function AdminReview({
         err.message?.toLowerCase?.().includes("already approved");
       if (isDuplicateApproval) {
         await replaceEntryFromDatabase(selectedEntry.id).catch(() => null);
-        await loadBudgetData().catch(() => null);
+        invalidateBudgetRecords();
+        await loadPlanningData().catch(() => null);
         setSelectedEntry(null);
       }
       onShowToast?.({
@@ -377,8 +387,9 @@ export default function AdminReview({
       await replaceEntryFromDatabase(selectedEntry.id).catch((refreshError) => {
         console.error("Failed to refresh returned entry:", refreshError);
       });
-      await loadBudgetData().catch((refreshError) => {
-        console.error("Failed to refresh budget data after return:", refreshError);
+      invalidateBudgetRecords();
+      await loadPlanningData().catch((refreshError) => {
+        console.error("Failed to refresh planning data after return:", refreshError);
       });
       setSelectedEntry(null);
       onShowToast?.({
@@ -419,8 +430,9 @@ export default function AdminReview({
       await replaceEntryFromDatabase(selectedEntry.id).catch((refreshError) => {
         console.error("Failed to refresh rejected entry:", refreshError);
       });
-      await loadBudgetData().catch((refreshError) => {
-        console.error("Failed to refresh budget data after rejection:", refreshError);
+      invalidateBudgetRecords();
+      await loadPlanningData().catch((refreshError) => {
+        console.error("Failed to refresh planning data after rejection:", refreshError);
       });
       setSelectedEntry(null);
       onShowToast?.({
@@ -465,8 +477,9 @@ export default function AdminReview({
       if (error) throw error;
 
       removeEntryFromState(deleteTarget.id);
-      await loadBudgetData().catch((refreshError) => {
-        console.error("Failed to refresh budget data after delete:", refreshError);
+      invalidateBudgetRecords();
+      await loadPlanningData().catch((refreshError) => {
+        console.error("Failed to refresh planning data after delete:", refreshError);
       });
       onShowToast?.({
         title: "Entry deleted",
@@ -492,8 +505,30 @@ export default function AdminReview({
       setDeleteActionBusy(false);
     }
   };
-  const loadBudgetData = useCallback(async () => {
-    setBudgetDataStatus("loading");
+  const loadPlanningData = useCallback(async () => {
+    setBudgetDataStatus(budgetDataReadyRef.current ? "refreshing" : "loading");
+    try {
+      const rows = await budgetPlanningService.getUnitStats();
+      const budgets = Object.fromEntries(UNITS.map((unit) => [unit, 0]));
+
+      rows.forEach((row) => {
+        budgets[normalizeUnitCode(row.unit)] = Number(row.planningEstimate || 0);
+      });
+
+      setUnitBudgets(budgets);
+      setTotalBudget(UNITS.reduce((sum, unit) => sum + Number(budgets[unit] || 0), 0));
+      budgetDataReadyRef.current = true;
+      setBudgetDataStatus("ready");
+    } catch (err) {
+      console.error("Failed to load planning stats:", err);
+      setBudgetDataStatus(budgetDataReadyRef.current ? "ready" : "unavailable");
+    }
+  }, [UNITS]);
+
+  const loadBudgetRecords = useCallback(async () => {
+    if (transactionsStatus === "loading") return;
+
+    setTransactionsStatus("loading");
     try {
       let {data: txData, error: txError} = await supabase
         .from("budget_transactions")
@@ -536,42 +571,24 @@ export default function AdminReview({
         }
       }
 
-        // All unit transactions for the general View Records
-        const allUnitTx = (txData || [])
+      setTransactions(
+        (txData || [])
           .filter((tx) => tx.unit)
-          .map((tx) => ({ ...tx, unit: normalizeUnitCode(tx.unit) }));
-        setTransactions(allUnitTx);
-
-    // Per-unit planning estimate calculation. Entry-linked transactions are
-    // approval/reversal records, so estimates stay separate from approvals.
-    const budgets = {};
-    UNITS.forEach((unit) => {
-      const unitTx = (txData || [])
-        .filter((tx) => normalizeUnitCode(tx.unit) === unit)
-        .filter((tx) => !tx.entry_id)
-        .map((tx) => ({ ...tx, unit: normalizeUnitCode(tx.unit) }));
-      let unitTotal = 0;
-      unitTx.forEach((tx) => {
-        if (tx.type === 'ADDED') {
-          unitTotal += Number(tx.amount);
-        } else if (tx.type === 'DEDUCTED') {
-          unitTotal -= Number(tx.amount);
-        }
-      });
-      budgets[unit] = unitTotal;
-    });
-    setUnitBudgets(budgets);
-
-    // Total planning estimate = sum of all unit estimate movements.
-    const grandTotal = UNITS.reduce((sum, u) => sum + (budgets[u] || 0), 0);
-    setTotalBudget(grandTotal);
-    setBudgetDataStatus("ready");
-
+          .map((tx) => ({ ...tx, unit: normalizeUnitCode(tx.unit) })),
+      );
+      setTransactionsStatus("ready");
     } catch (err) {
-      console.error("Failed to load planning budget transactions:", err);
-      setBudgetDataStatus("unavailable");
+      console.error("Failed to load planning budget records:", err);
+      setTransactionsStatus("unavailable");
     }
-  }, [UNITS]);
+  }, [transactionsStatus]);
+
+  const handleOpenHistoryModal = useCallback(() => {
+    setShowHistoryModal(true);
+    if (transactionsStatus !== "ready") {
+      void loadBudgetRecords();
+    }
+  }, [loadBudgetRecords, transactionsStatus]);
   const closeUnitAllocationModal = () => {
     setActiveUnitBudgetModal(null);
     setUnitBudgetAmount("");
@@ -614,7 +631,8 @@ export default function AdminReview({
             : `Planning estimate reduction for ${unit}`),
         unit: normalizeUnitCode(unit),
       });
-      await loadBudgetData();
+      invalidateBudgetRecords();
+      await loadPlanningData();
       closeUnitAllocationModal();
       onShowToast({
         title: "Planning estimate updated",
@@ -634,8 +652,8 @@ export default function AdminReview({
   };
 
       useEffect(() => {
-        loadBudgetData();
-      }, [loadBudgetData]);
+        loadPlanningData();
+      }, [loadPlanningData]);
 
   return (
     <div className="space-y-6">
