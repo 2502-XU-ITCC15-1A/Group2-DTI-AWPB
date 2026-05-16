@@ -19,7 +19,7 @@ export default function AdminUnitAllocationModal({
   onDescriptionChange,
   onSave,
   onTypeChange,
-  remaining = 0,
+  estimate = 0,
   saving = false,
   unit,
 }) {
@@ -32,9 +32,9 @@ export default function AdminUnitAllocationModal({
               <Wallet className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-xl font-semibold text-white">Edit Allocation — {unit}</h3>
+              <h3 className="text-xl font-semibold text-white">Edit Planning Estimate - {unit}</h3>
               <p className="mt-1 text-sm text-white/75">
-                Adjust this unit's remaining approval limit.
+                Adjust this unit's estimated AWPB budget for planning.
               </p>
             </div>
           </div>
@@ -51,13 +51,13 @@ export default function AdminUnitAllocationModal({
         <div className="border-b border-slate-200/80 bg-white px-6 py-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-500">Current Remaining</p>
+              <p className="text-sm font-medium text-slate-500">Current Planning Estimate</p>
               <p className="mt-1 text-3xl font-bold text-slate-900">
-                ₱{formatCurrency(remaining)}
+                ₱{formatCurrency(estimate)}
               </p>
             </div>
             <p className="max-w-[320px] text-sm text-slate-500">
-              This is the available amount left for approving entries under {unit}.
+              Approved entries can go above this estimate while the final plan is being formed.
             </p>
           </div>
         </div>
@@ -78,7 +78,7 @@ export default function AdminUnitAllocationModal({
                     : "text-slate-500 hover:bg-white hover:text-slate-700"
                 }`}
               >
-                Add Funds
+                Increase Estimate
               </button>
               <button
                 type="button"
@@ -90,7 +90,7 @@ export default function AdminUnitAllocationModal({
                     : "text-slate-500 hover:bg-white hover:text-slate-700"
                 }`}
               >
-                Subtract Funds
+                Reduce Estimate
               </button>
             </div>
           </div>
@@ -117,8 +117,8 @@ export default function AdminUnitAllocationModal({
               type="text"
               placeholder={
                 adjustmentType === "ADDED"
-                  ? `Additional allocation for ${unit}`
-                  : `Allocation reduction for ${unit}`
+                  ? `Additional planning estimate for ${unit}`
+                  : `Planning estimate reduction for ${unit}`
               }
               value={description}
               onChange={(event) => onDescriptionChange?.(event.target.value)}

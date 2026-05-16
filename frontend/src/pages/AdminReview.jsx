@@ -33,6 +33,14 @@ function formatCurrency(value) {
   }).format(value || 0);
 }
 
+function formatPlanningBalance(value) {
+  const numericValue = Number(value || 0);
+  if (numericValue === 0) return "Balanced";
+  if (numericValue > 0) return formatCurrency(numericValue);
+
+  return `${formatCurrency(Math.abs(numericValue))} over estimate`;
+}
+
 function formatDate(value) {
   if (!value) return "N/A";
   return new Date(value).toLocaleString("en-PH", {
@@ -125,24 +133,35 @@ export default function AdminReview({
     return Object.values(approvedBudgetByUnit).reduce((sum, value) => sum + value, 0);
   }, [approvedBudgetByUnit]);
 
+  const approvedCountByUnit = useMemo(() => {
+    const totals = Object.fromEntries(UNITS.map((unit) => [unit, 0]));
+    approvedEntries.forEach((entry) => {
+      const unit = normalizeUnitCode(entry.unit);
+      totals[unit] = (totals[unit] || 0) + 1;
+    });
+    return totals;
+  }, [UNITS, approvedEntries]);
+
   const unitAllocationStats = useMemo(() => {
     return Object.fromEntries(
       UNITS.map((unit) => {
-        const remaining = Number(unitBudgets[unit] || 0);
+        const estimate = Number(unitBudgets[unit] || 0);
         const approved = Number(approvedBudgetByUnit[unit] || 0);
         return [
           unit,
           {
-            allocated: remaining + approved,
+            estimate,
             approved,
-            remaining,
+            approvedCount: Number(approvedCountByUnit[unit] || 0),
+            variance: estimate - approved,
           },
         ];
       }),
     );
-  }, [UNITS, approvedBudgetByUnit, unitBudgets]);
+  }, [UNITS, approvedBudgetByUnit, approvedCountByUnit, unitBudgets]);
 
-  const totalAllocatedBudget = totalBudget + totalApprovedBudget;
+  const totalPlanningEstimate = totalBudget;
+  const totalVariance = totalPlanningEstimate - totalApprovedBudget;
 
   const approvedEntriesByUnit = useMemo(() => {
     return Object.fromEntries(
@@ -220,7 +239,7 @@ export default function AdminReview({
       onShowToast?.({
         title: "Already approved",
         description:
-          "This entry has already been approved, so no additional allocation was deducted.",
+          "This entry has already been approved, so the approved plan total was not counted again.",
         type: "info",
       });
       return;
@@ -229,17 +248,6 @@ export default function AdminReview({
     const entryAmount = selectedEntry.grandTotal || 0;
     const entryTitle = selectedEntry.titleOfActivities;
     const entryUnit = normalizeUnitCode(selectedEntry.unit);
-
-    const hasLoadedUnitBudget = Object.prototype.hasOwnProperty.call(unitBudgets, entryUnit);
-    const unitBudget = unitBudgets[entryUnit] || 0;
-    if (hasLoadedUnitBudget && entryAmount > unitBudget) {
-      onShowToast?.({
-        title: "Insufficient allocation",
-        description: `Need ₱${entryAmount.toLocaleString()} but ${entryUnit} only has ₱${unitBudget.toLocaleString()} remaining. Edit the unit allocation first.`,
-        type: "error",
-      });
-      return;
-    }
 
     setReviewActionBusy(true);
     setReviewBusyAction("approve");
@@ -260,7 +268,7 @@ export default function AdminReview({
       setSelectedEntry(null);
       onShowToast?.({
         title: "Entry approved",
-        description: `${entryTitle} was approved successfully. ₱${entryAmount.toLocaleString()} deducted from ${entryUnit}'s remaining allocation.`,
+        description: `${entryTitle} was approved successfully. ${entryUnit}'s approved plan total now includes ₱${entryAmount.toLocaleString()}.`,
         type: "success",
       });
     } catch (err) {
@@ -276,7 +284,7 @@ export default function AdminReview({
       onShowToast?.({
         title: isDuplicateApproval ? "Already approved" : "Could not approve entry",
         description: isDuplicateApproval
-          ? "This entry already has an approval deduction. Allocation was not deducted again."
+          ? "This entry already has an approval record. The approved plan total was not counted again."
           : err.message || "Please try again.",
         type: isDuplicateApproval ? "info" : "error",
       });
@@ -358,7 +366,7 @@ export default function AdminReview({
       setSelectedEntry(null);
       onShowToast?.({
         title: "Entry returned",
-        description: `${entryTitle} was returned for revision.${isApprovedStatus(oldStatus) ? ` ₱${entryAmount.toLocaleString()} restored to allocation.` : ""}`,
+        description: `${entryTitle} was returned for revision.${isApprovedStatus(oldStatus) ? ` ₱${entryAmount.toLocaleString()} was removed from the approved plan total.` : ""}`,
         type: "success",
       });
     } catch (err) {
@@ -400,7 +408,7 @@ export default function AdminReview({
       setSelectedEntry(null);
       onShowToast?.({
         title: "Entry rejected",
-        description: `${entryTitle} was rejected.${isApprovedStatus(oldStatus) ? ` ₱${entryAmount.toLocaleString()} restored to allocation.` : ""}`,
+        description: `${entryTitle} was rejected.${isApprovedStatus(oldStatus) ? ` ₱${entryAmount.toLocaleString()} was removed from the approved plan total.` : ""}`,
         type: "success",
       });
     } catch (err) {
@@ -430,7 +438,7 @@ export default function AdminReview({
     const entryAmount = Number(deleteTarget.grandTotal || 0);
     const entryStatus = deleteTarget.status;
     const entryUnit = normalizeUnitCode(deleteTarget.unit);
-    const shouldRestoreAllocation = isApprovedStatus(entryStatus) && entryAmount > 0;
+    const shouldAdjustApprovedTotal = isApprovedStatus(entryStatus) && entryAmount > 0;
 
     setDeleteActionBusy(true);
     try {
@@ -446,8 +454,8 @@ export default function AdminReview({
       onShowToast?.({
         title: "Entry deleted",
         description: `${entryTitle} was removed successfully.${
-          shouldRestoreAllocation
-            ? ` ₱${entryAmount.toLocaleString()} was restored to ${entryUnit}'s allocation.`
+          shouldAdjustApprovedTotal
+            ? ` ₱${entryAmount.toLocaleString()} was removed from ${entryUnit}'s approved plan total.`
             : ""
         }`,
         type: "success",
@@ -516,11 +524,13 @@ export default function AdminReview({
           .map((tx) => ({ ...tx, unit: normalizeUnitCode(tx.unit) }));
         setTransactions(allUnitTx);
 
-    // Per-unit remaining allocation calculation
+    // Per-unit planning estimate calculation. Entry-linked transactions are
+    // approval/reversal records, so estimates stay separate from approvals.
     const budgets = {};
     UNITS.forEach((unit) => {
       const unitTx = (txData || [])
         .filter((tx) => normalizeUnitCode(tx.unit) === unit)
+        .filter((tx) => !tx.entry_id)
         .map((tx) => ({ ...tx, unit: normalizeUnitCode(tx.unit) }));
       let unitTotal = 0;
       unitTx.forEach((tx) => {
@@ -534,12 +544,12 @@ export default function AdminReview({
     });
     setUnitBudgets(budgets);
 
-    // Total remaining allocation = sum of all unit remaining balances
+    // Total planning estimate = sum of all unit estimate movements.
     const grandTotal = UNITS.reduce((sum, u) => sum + (budgets[u] || 0), 0);
     setTotalBudget(grandTotal);
 
     } catch (err) {
-      console.error("Failed to load allocation transactions:", err);
+      console.error("Failed to load planning budget transactions:", err);
     }
   }, [UNITS]);
   const closeUnitAllocationModal = () => {
@@ -557,7 +567,7 @@ export default function AdminReview({
     if (!amount || amount <= 0) {
       onShowToast?.({
         title: "Invalid amount",
-        description: "Please enter a valid allocation amount.",
+        description: "Please enter a valid planning estimate amount.",
         type: "error",
       });
       return;
@@ -565,8 +575,8 @@ export default function AdminReview({
 
     if (unitBudgetAdjustmentType === "DEDUCTED" && amount > Number(unitBudgets[unit] || 0)) {
       onShowToast?.({
-        title: "Adjustment exceeds remaining allocation",
-        description: `${unit} only has ₱${Number(unitBudgets[unit] || 0).toLocaleString()} remaining.`,
+        title: "Adjustment exceeds planning estimate",
+        description: `${unit}'s current planning estimate is ₱${Number(unitBudgets[unit] || 0).toLocaleString()}.`,
         type: "error",
       });
       return;
@@ -580,21 +590,21 @@ export default function AdminReview({
         description:
           unitBudgetDesc ||
           (unitBudgetAdjustmentType === "ADDED"
-            ? `Additional allocation for ${unit}`
-            : `Allocation reduction for ${unit}`),
+            ? `Additional planning estimate for ${unit}`
+            : `Planning estimate reduction for ${unit}`),
         unit: normalizeUnitCode(unit),
       });
       await loadBudgetData();
       closeUnitAllocationModal();
       onShowToast({
-        title: "Allocation updated",
-        description: `${unit} allocation was ${unitBudgetAdjustmentType === "ADDED" ? "increased" : "reduced"} by ₱${amount.toLocaleString()}.`,
+        title: "Planning estimate updated",
+        description: `${unit}'s estimate was ${unitBudgetAdjustmentType === "ADDED" ? "increased" : "reduced"} by ₱${amount.toLocaleString()}.`,
         type: "success",
       });
     } catch (err) {
-      console.error("Failed to update unit allocation:", err);
+      console.error("Failed to update unit planning estimate:", err);
       onShowToast({
-        title: "Could not update allocation",
+        title: "Could not update planning estimate",
         description: err.message || "Please try again.",
         type: "error",
       });
@@ -623,31 +633,31 @@ export default function AdminReview({
           <div className="grid gap-5 xl:grid-cols-[1fr_auto] xl:items-center">
             <div>
               <p className="text-base font-semibold text-white">
-                Allocation Summary
+                Planning Summary
               </p>
               <p className="mt-1 max-w-2xl text-sm text-white/85">
-                Unit allocations set approval limits. Approved entries reduce remaining balances.
+                Approvals can exceed estimates during planning. Use the planning balance to adjust the final AWPB budget.
               </p>
             </div>
 
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
               <div className="grid gap-2 sm:grid-cols-3">
                 <div className="min-w-[150px] rounded-2xl bg-white/14 px-4 py-2.5">
-                  <p className="text-xs font-medium text-white/70">Allocated</p>
+                  <p className="text-xs font-medium text-white/70">Planning Estimate</p>
                   <p className="text-base font-bold text-white">
-                    ₱{totalAllocatedBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ₱{totalPlanningEstimate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
                 <div className="min-w-[150px] rounded-2xl bg-white/14 px-4 py-2.5">
-                  <p className="text-xs font-medium text-white/70">Approved</p>
+                  <p className="text-xs font-medium text-white/70">Approved Plan</p>
                   <p className="text-base font-bold text-white">
                     ₱{totalApprovedBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
                 <div className="min-w-[150px] rounded-2xl bg-white/22 px-4 py-2.5">
-                  <p className="text-xs font-medium text-white/75">Remaining</p>
-                  <p className="text-base font-bold text-white">
-                    ₱{totalBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  <p className="text-xs font-medium text-white/75">Planning Balance</p>
+                  <p className={`text-base font-bold ${totalVariance < 0 ? "text-rose-100" : "text-white"}`}>
+                    {formatPlanningBalance(totalVariance)}
                   </p>
                 </div>
               </div>
@@ -681,32 +691,50 @@ export default function AdminReview({
               key={unit}
               className="overflow-hidden border-0 bg-gradient-to-br from-[#1f2f74] via-[#243b86] to-[#2a4694] text-white shadow-[0_10px_22px_rgba(31,47,116,0.18)]"
             >
-              <CardContent className="p-4">
-                <div className="space-y-3">
+              <CardContent className="p-5">
+                <div className="space-y-4">
                   <div className="flex items-start justify-between gap-2 min-[1500px]:gap-3">
                     <div className="min-w-0">
                       <p className="whitespace-nowrap text-[0.65rem] font-semibold uppercase tracking-[0.08em] text-white/60 min-[1500px]:text-xs min-[1500px]:tracking-wide">
-                        Unit Allocation
+                        Unit Planning
                       </p>
-                      <h2 className="mt-1 text-2xl font-bold tracking-tight">{unit}</h2>
+                      <h2 className="mt-1 text-3xl font-bold tracking-tight">{unit}</h2>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs font-semibold text-white/70 min-[1500px]:text-sm">Remaining</p>
-                      <p className="whitespace-nowrap text-base font-bold leading-tight min-[1500px]:text-xl 2xl:text-2xl">
-                        ₱{Number(stats.remaining || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <p className="text-xs font-semibold text-white/70 min-[1500px]:text-sm">Approved Entries</p>
+                      <p className="whitespace-nowrap text-3xl font-bold leading-tight">
+                        {Number(stats.approvedCount || 0).toLocaleString()}
                       </p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-white/15 pt-3">
-                    <p className="text-xs text-white/55">Allocated</p>
-                    <p className="text-xs text-white/55">Approved</p>
-                    <p className="text-sm font-semibold">
-                      ₱{Number(stats.allocated || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  <div className="rounded-2xl bg-white/12 px-4 py-3 shadow-inner shadow-white/5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
+                      Approved Plan
                     </p>
-                    <p className="text-sm font-semibold">
-                      ₱{Number(stats.approved || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <p className="mt-1 truncate text-2xl font-bold leading-tight text-white" title={formatCurrency(stats.approved)}>
+                      {formatCurrency(stats.approved)}
                     </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 border-t border-white/15 pt-3">
+                    <div className="min-w-0">
+                      <p className="text-xs text-white/55">Planning Estimate</p>
+                      <p className="mt-1 truncate text-sm font-semibold" title={formatCurrency(stats.estimate)}>
+                        {formatCurrency(stats.estimate)}
+                      </p>
+                    </div>
+                    <div className="min-w-0 text-right">
+                      <p className="text-xs text-white/55">Planning Balance</p>
+                      <p
+                        className={`mt-1 truncate text-sm font-semibold ${
+                          Number(stats.variance || 0) < 0 ? "text-rose-100" : ""
+                        }`}
+                        title={formatPlanningBalance(stats.variance)}
+                      >
+                        {formatPlanningBalance(stats.variance)}
+                      </p>
+                    </div>
                   </div>
 
                   <div className="flex gap-2">
@@ -716,7 +744,7 @@ export default function AdminReview({
                       className="flex-1 rounded-xl bg-white text-slate-900 hover:bg-slate-100"
                     >
                       <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                      Edit Allocation
+                      Edit Estimate
                     </Button>
                     <Button
                       size="sm"
@@ -745,7 +773,7 @@ export default function AdminReview({
           onDescriptionChange={setUnitBudgetDesc}
           onSave={handleSaveUnitAllocation}
           onTypeChange={setUnitBudgetAdjustmentType}
-          remaining={unitAllocationStats[activeUnitBudgetModal]?.remaining || 0}
+          estimate={unitAllocationStats[activeUnitBudgetModal]?.estimate || 0}
           saving={unitAllocationSaving}
           unit={activeUnitBudgetModal}
         />

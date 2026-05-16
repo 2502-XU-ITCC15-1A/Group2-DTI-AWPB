@@ -47,6 +47,42 @@ function getTransactionActorName(tx) {
   return tx.actor?.full_name || tx.actor?.username || tx.actor_name || "N/A";
 }
 
+function getTransactionDisplay(tx) {
+  if (tx.entry_id && tx.type === "DEDUCTED") {
+    return {
+      amountClassName: "text-blue-600",
+      label: "APPROVED PLAN",
+      labelClassName: "inline-flex min-w-28 justify-center bg-blue-100 text-blue-700",
+      prefix: "",
+    };
+  }
+
+  if (tx.entry_id && tx.type === "ADDED") {
+    return {
+      amountClassName: "text-amber-600",
+      label: "PLAN REVERSAL",
+      labelClassName: "inline-flex min-w-28 justify-center bg-amber-100 text-amber-700",
+      prefix: "",
+    };
+  }
+
+  if (tx.type === "ADDED") {
+    return {
+      amountClassName: "text-green-600",
+      label: "ESTIMATE +",
+      labelClassName: "inline-flex min-w-24 justify-center bg-green-100 text-green-700",
+      prefix: "+",
+    };
+  }
+
+  return {
+    amountClassName: "text-red-600",
+    label: "ESTIMATE -",
+    labelClassName: "inline-flex min-w-24 justify-center bg-red-100 text-red-700",
+    prefix: "-",
+  };
+}
+
 function normalizeSearchValue(value) {
   return String(value || "").trim().toLowerCase();
 }
@@ -80,6 +116,7 @@ export default function AdminBudgetRecordsModal({
         [
           tx.description,
           tx.type,
+          getTransactionDisplay(tx).label,
           tx.unit,
           getTransactionActorName(tx),
           formatRecordDateTime(tx.created_at),
@@ -134,42 +171,33 @@ export default function AdminBudgetRecordsModal({
 
   const transactionRows = useMemo(
     () =>
-      pagedTransactions.map((tx) => (
-        <tr
-          key={tx.id}
-          className="border-b border-slate-100 last:border-0 hover:bg-slate-50"
-        >
-          <td className="whitespace-nowrap px-6 py-3 text-slate-600">
-            {formatRecordDateTime(tx.created_at)}
-          </td>
-          <td className="px-6 py-3 text-center">
-            <Badge className="inline-flex min-w-16 justify-center bg-slate-100 text-slate-700">
-              {normalizeUnitCode(tx.unit)}
-            </Badge>
-          </td>
-          <td className="px-6 py-3 text-center">
-            <Badge
-              className={
-                tx.type === "ADDED"
-                  ? "inline-flex min-w-20 justify-center bg-green-100 text-green-700"
-                  : "inline-flex min-w-20 justify-center bg-red-100 text-red-700"
-              }
-            >
-              {tx.type}
-            </Badge>
-          </td>
-          <td
-            className={`px-6 py-3 font-semibold ${
-              tx.type === "ADDED" ? "text-green-600" : "text-red-600"
-            }`}
+      pagedTransactions.map((tx) => {
+        const display = getTransactionDisplay(tx);
+
+        return (
+          <tr
+            key={tx.id}
+            className="border-b border-slate-100 last:border-0 hover:bg-slate-50"
           >
-            {tx.type === "ADDED" ? "+" : "-"}₱
-            {Number(tx.amount).toLocaleString()}
-          </td>
-          <td className="px-6 py-3 text-slate-600">{getTransactionActorName(tx)}</td>
-          <td className="px-6 py-3 text-slate-600">{tx.description}</td>
-        </tr>
-      )),
+            <td className="whitespace-nowrap px-6 py-3 text-slate-600">
+              {formatRecordDateTime(tx.created_at)}
+            </td>
+            <td className="px-6 py-3 text-center">
+              <Badge className="inline-flex min-w-16 justify-center bg-slate-100 text-slate-700">
+                {normalizeUnitCode(tx.unit)}
+              </Badge>
+            </td>
+            <td className="px-6 py-3 text-center">
+              <Badge className={display.labelClassName}>{display.label}</Badge>
+            </td>
+            <td className={`px-6 py-3 font-semibold ${display.amountClassName}`}>
+              {display.prefix}₱{Number(tx.amount).toLocaleString()}
+            </td>
+            <td className="px-6 py-3 text-slate-600">{getTransactionActorName(tx)}</td>
+            <td className="px-6 py-3 text-slate-600">{tx.description}</td>
+          </tr>
+        );
+      }),
     [pagedTransactions],
   );
 
@@ -218,9 +246,9 @@ export default function AdminBudgetRecordsModal({
               <History className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-xl font-semibold text-white">Allocation Records</h3>
+              <h3 className="text-xl font-semibold text-white">Planning Budget Records</h3>
               <p className="mt-1 text-sm text-white/80">
-                Track allocation edits and approved entry deductions.
+                Track estimate edits, approvals, and current approved AWPB entries.
               </p>
             </div>
           </div>
@@ -244,7 +272,7 @@ export default function AdminBudgetRecordsModal({
                   : "text-slate-500 hover:bg-white hover:text-slate-700"
               }`}
             >
-              Allocation Movements
+              Budget Activity
             </button>
             <button
               type="button"
@@ -279,7 +307,7 @@ export default function AdminBudgetRecordsModal({
                 <p className="text-sm text-slate-500">
                   Showing <span className="font-semibold text-slate-700">{pagedTransactions.length}</span>{" "}
                   of <span className="font-semibold text-slate-700">{filteredTransactions.length}</span>{" "}
-                  movements
+                  records
                 </p>
                 <Select
                   value={movementPageSize}
@@ -319,7 +347,7 @@ export default function AdminBudgetRecordsModal({
                   <th className="px-6 py-3 text-center font-semibold text-slate-700">Unit</th>
                   <th className="px-6 py-3 text-center font-semibold text-slate-700">Type</th>
                   <th className="px-6 py-3 text-left font-semibold text-slate-700">Amount</th>
-                  <th className="px-6 py-3 text-left font-semibold text-slate-700">Edited By</th>
+                  <th className="px-6 py-3 text-left font-semibold text-slate-700">Recorded By</th>
                   <th className="px-6 py-3 text-left font-semibold text-slate-700">
                     Description
                   </th>
@@ -330,10 +358,10 @@ export default function AdminBudgetRecordsModal({
                   <tr>
                     <td colSpan="6" className="py-12 text-center text-slate-400">
                       <History className="mx-auto mb-3 h-12 w-12 opacity-50" />
-                      <p>{transactions.length === 0 ? "No transactions yet" : "No matching movements"}</p>
+                      <p>{transactions.length === 0 ? "No budget activity yet" : "No matching activity"}</p>
                       <p className="text-sm">
                         {transactions.length === 0
-                          ? "Edit a unit allocation to start a ledger."
+                          ? "Estimate edits and approval activity will appear here."
                           : "Try a broader search term or change the page size."}
                       </p>
                     </td>

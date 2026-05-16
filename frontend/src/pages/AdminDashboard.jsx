@@ -277,7 +277,7 @@ export default function AdminDashboard({
             Admin Dashboard
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Monitor workflow volume and budget movement across submitted AWPB
+            Review workflow volume and approved budget plans across submitted AWPB
             entries.
           </p>
         </div>

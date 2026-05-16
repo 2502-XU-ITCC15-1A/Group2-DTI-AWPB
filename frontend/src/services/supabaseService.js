@@ -630,6 +630,21 @@ export const entriesService = {
   },
 };
 
+export const budgetPlanningService = {
+  async getUnitStats() {
+    const { data, error } = await supabase.rpc('get_unit_planning_budget_stats');
+    if (error) throw error;
+
+    return (data || []).map((row) => ({
+      unit: normalizeUnitCode(row.unit),
+      planningEstimate: Number(row.planning_estimate) || 0,
+      approvedTotal: Number(row.approved_total) || 0,
+      variance: Number(row.variance) || 0,
+      approvedCount: Number(row.approved_count) || 0,
+    }));
+  },
+};
+
 // Template services (read-only)
 export const templateService = {
   async getHierarchy() {

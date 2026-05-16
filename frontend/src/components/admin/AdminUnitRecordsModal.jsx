@@ -93,7 +93,7 @@ export default function AdminUnitRecordsModal({
             <div>
               <h3 className="text-xl font-semibold text-white">{unit} Approved Entries</h3>
               <p className="mt-1 text-sm text-white/75">
-                Entries approved against this unit allocation.
+                Entries currently included in this unit's approved AWPB plan.
               </p>
             </div>
           </div>

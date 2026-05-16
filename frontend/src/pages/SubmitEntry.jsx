@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
-import { templateService } from "../services/supabaseService";
+import { budgetPlanningService, templateService } from "../services/supabaseService";
 import { normalizeUnitCode } from "../lib/units";
 
 const FALLBACK_VALUE = "N/A";
@@ -251,6 +251,14 @@ function formatCurrency(value) {
   }).format(value || 0);
 }
 
+function formatPlanningBalance(value) {
+  const numericValue = Number(value || 0);
+  if (numericValue === 0) return "Balanced";
+  if (numericValue > 0) return formatCurrency(numericValue);
+
+  return `+${formatCurrency(Math.abs(numericValue))} over estimate`;
+}
+
 function formatTarget(value) {
   return new Intl.NumberFormat("en-PH", {
     minimumFractionDigits: 0,
@@ -328,6 +336,8 @@ export default function SubmitEntry({
   // flight. Once Supabase responds, we replace the data with the live one.
   // -------------------------------------------------------------------------
   const [supabaseTemplateData, setSupabaseTemplateData] = useState(null);
+  const [unitPlanningStats, setUnitPlanningStats] = useState({});
+  const [unitPlanningStatsStatus, setUnitPlanningStatsStatus] = useState("loading");
 
   useEffect(() => {
     let cancelled = false;
@@ -345,6 +355,33 @@ export default function SubmitEntry({
       } catch (err) {
         console.error("Failed to load template data from Supabase:", err);
         // Fall back to the JSON prop silently
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setUnitPlanningStatsStatus("loading");
+      try {
+        const rows = await budgetPlanningService.getUnitStats();
+        if (!cancelled) {
+          setUnitPlanningStats(
+            Object.fromEntries(
+              rows.map((row) => [row.unit, { ...row, hasLiveStats: true }]),
+            ),
+          );
+          setUnitPlanningStatsStatus("ready");
+        }
+      } catch (err) {
+        console.error("Failed to load unit planning stats:", err);
+        if (!cancelled) {
+          setUnitPlanningStats({});
+          setUnitPlanningStatsStatus("unavailable");
+        }
       }
     })();
     return () => {
@@ -534,6 +571,48 @@ export default function SubmitEntry({
   const totalTarget = useMemo(() => {
     return monthlyRows.reduce((sum, row) => sum + row.target, 0);
   }, [monthlyRows]);
+
+  const selectedUnitPlanningStats = useMemo(() => {
+    if (!unit) return null;
+    const normalizedUnit = normalizeUnitCode(unit);
+    return (
+      unitPlanningStats[normalizedUnit] || {
+        unit: normalizedUnit,
+        planningEstimate: 0,
+        approvedTotal: 0,
+        variance: 0,
+        approvedCount: 0,
+        hasLiveStats: false,
+      }
+    );
+  }, [unit, unitPlanningStats]);
+
+  const planningEstimate = selectedUnitPlanningStats?.planningEstimate || 0;
+  const approvedPlanTotal = selectedUnitPlanningStats?.approvedTotal || 0;
+  const proposedApprovedTotal = approvedPlanTotal + grandTotal;
+  const estimateGapAfterEntry = planningEstimate - proposedApprovedTotal;
+  const hasPlanningEstimate = planningEstimate > 0;
+  const isPlanningStatsLoading = unitPlanningStatsStatus === "loading";
+  const isPlanningStatsUnavailable = unitPlanningStatsStatus === "unavailable";
+  const planningEstimateLabel = isPlanningStatsLoading
+    ? "Loading..."
+    : formatCurrency(planningEstimate);
+  const planningBalanceAfterEntryLabel = isPlanningStatsLoading
+    ? "Loading..."
+    : isPlanningStatsUnavailable
+      ? "Waiting for admin estimate"
+      : hasPlanningEstimate
+        ? formatPlanningBalance(estimateGapAfterEntry)
+        : "No estimate set yet";
+  const planningStatusLabel = isPlanningStatsLoading
+    ? "Loading Estimate"
+    : isPlanningStatsUnavailable
+      ? "Estimate Unavailable"
+      : !hasPlanningEstimate
+        ? "No Estimate Set"
+        : estimateGapAfterEntry < 0
+          ? "Over Estimate"
+          : "Within Estimate";
 
   useEffect(() => {
     const isReturnedEdit = entryToEdit && entryToEdit.status === "Returned";
@@ -1389,6 +1468,88 @@ export default function SubmitEntry({
                 )}
               </div>
 
+              {selectedUnitPlanningStats && (
+                <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-[#6ea3a6] via-[#4f8f93] to-[#2f7f86] p-5 text-white shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <h3 className="text-base font-semibold text-white">
+                        {normalizeUnitCode(unit)} Planning Snapshot
+                      </h3>
+                      <p className="mt-1 text-sm text-white/85">
+                        Estimates guide the AWPB plan; submissions may exceed them.
+                      </p>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className={`w-fit ${
+                        isPlanningStatsLoading || isPlanningStatsUnavailable || !hasPlanningEstimate
+                          ? "border-white/35 bg-white/15 text-white"
+                          : estimateGapAfterEntry < 0
+                          ? "border-red-300 bg-white/40 text-red-800"
+                          : "border-white/40 bg-white/20 text-white"
+                      }`}
+                    >
+                      {planningStatusLabel}
+                    </Badge>
+                  </div>
+
+                  <div className="mt-4 rounded-2xl bg-white/18 px-4 py-3 shadow-inner shadow-white/5">
+                    <p className="text-xs font-semibold uppercase text-white/70">
+                      Unit Planning Estimate
+                    </p>
+                    <p className="mt-1 text-3xl font-bold leading-tight text-white">
+                      {planningEstimateLabel}
+                    </p>
+                    {isPlanningStatsUnavailable && (
+                      <p className="mt-1 text-xs text-white/75">
+                        Admin planning estimates are not connected yet.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-xl bg-white/14 px-3 py-2.5">
+                      <p className="text-xs font-medium text-white/70">Approved Plan</p>
+                      <p className="mt-1 text-sm font-semibold text-white">
+                        {formatCurrency(approvedPlanTotal)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-white/14 px-3 py-2.5">
+                      <p className="text-xs font-medium text-white/70">This Entry</p>
+                      <p className="mt-1 text-sm font-semibold text-white">
+                        {formatCurrency(grandTotal)}
+                      </p>
+                    </div>
+                    <div
+                      className={`rounded-xl px-3 py-2.5 ${
+                        hasPlanningEstimate && estimateGapAfterEntry < 0
+                          ? "bg-white/95"
+                          : "bg-white/14"
+                      }`}
+                    >
+                      <p
+                        className={`text-xs font-medium ${
+                          hasPlanningEstimate && estimateGapAfterEntry < 0
+                            ? "text-red-700"
+                            : "text-white/70"
+                        }`}
+                      >
+                        Planning Balance After Entry
+                      </p>
+                      <p
+                        className={`mt-1 text-sm font-semibold ${
+                          hasPlanningEstimate && estimateGapAfterEntry < 0
+                            ? "text-red-700"
+                            : "text-white"
+                        }`}
+                      >
+                        {planningBalanceAfterEntryLabel}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {targetValidationMessage && (
                 <div
                   role="alert"
@@ -1569,6 +1730,12 @@ export default function SubmitEntry({
                       <span className="font-medium">Grand Total:</span>{" "}
                       {formatCurrency(grandTotal)}
                     </p>
+                    {selectedUnitPlanningStats && (
+                      <p>
+                        <span className="font-medium">Planning Balance After Entry:</span>{" "}
+                        {planningBalanceAfterEntryLabel}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
