@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -213,8 +213,33 @@ const defaultFormValues = {
 
 function toNumber(value) {
   if (value === "" || value === null || value === undefined) return 0;
-  const parsed = Number(value);
+  const parsed = Number(String(value).replace(/,/g, ""));
   return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function normalizeNumberInput(value) {
+  const digitsAndDots = String(value ?? "")
+    .replace(/,/g, "")
+    .replace(/[^\d.]/g, "");
+  const dotIndex = digitsAndDots.indexOf(".");
+
+  if (dotIndex === -1) return digitsAndDots;
+
+  return `${digitsAndDots.slice(0, dotIndex)}.${digitsAndDots
+    .slice(dotIndex + 1)
+    .replace(/\./g, "")}`;
+}
+
+function formatNumberInput(value) {
+  const normalized = normalizeNumberInput(value);
+  if (!normalized) return "";
+
+  const hasDecimal = normalized.includes(".");
+  const [rawWhole = "", fraction = ""] = normalized.split(".");
+  const whole = (rawWhole || "0").replace(/^0+(?=\d)/, "");
+  const formattedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+  return `${formattedWhole}${hasDecimal ? `.${fraction}` : ""}`;
 }
 
 function formatCurrency(value) {
@@ -1329,20 +1354,33 @@ export default function SubmitEntry({
                 <label className="mb-2 block text-sm font-medium">
                   Unit Cost
                 </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="Enter unit cost"
-                  {...register("unitCost", {
-                    setValueAs: (value) => (value === "" ? "" : Number(value)),
-                    required: "Unit Cost is required",
-                    min: {
-                      value: 0,
-                      message: "Unit Cost cannot be negative",
+                <Controller
+                  name="unitCost"
+                  control={control}
+                  rules={{
+                    validate: (value) => {
+                      if (value === "" || value === null || value === undefined) {
+                        return "Unit Cost is required";
+                      }
+
+                      return toNumber(value) >= 0 || "Unit Cost cannot be negative";
                     },
-                  })}
-                  className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-300"
+                  }}
+                  render={({ field }) => (
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="Enter unit cost"
+                      name={field.name}
+                      ref={field.ref}
+                      value={formatNumberInput(field.value)}
+                      onBlur={field.onBlur}
+                      onChange={(event) =>
+                        field.onChange(normalizeNumberInput(event.target.value))
+                      }
+                      className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-300"
+                    />
+                  )}
                 />
                 {errors.unitCost && (
                   <p className="mt-1 text-sm text-red-600">
