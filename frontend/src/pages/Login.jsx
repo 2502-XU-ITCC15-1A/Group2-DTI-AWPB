@@ -4,7 +4,7 @@ import { Eye, EyeOff, Loader2 } from "lucide-react"
 import logo from "../assets/logo.png"
 import { authService } from "../services/supabaseService"
 
-export default function Login({ onLogin }) {
+export default function Login({ onLogin, notice = "" }) {
     const [showPassword, setShowPassword] = useState(false)
     const [formData, setFormData] = useState({
         username: "",
@@ -98,6 +98,12 @@ export default function Login({ onLogin }) {
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-5">
+                    {notice && !error && (
+                        <div className="rounded-2xl border border-[#9dc7c9] bg-[#e8f5f5] px-4 py-3 text-sm text-[#205b60]">
+                            {notice}
+                        </div>
+                    )}
+
                     <div>
                         <label className="mb-2 block text-sm font-medium text-slate-700">
                             Username
