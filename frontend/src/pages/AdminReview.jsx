@@ -689,10 +689,10 @@ export default function AdminReview({
           return (
             <Card
               key={unit}
-              className="overflow-hidden border-0 bg-gradient-to-br from-[#1f2f74] via-[#243b86] to-[#2a4694] text-white shadow-[0_10px_22px_rgba(31,47,116,0.18)]"
+              className="flex min-h-[360px] overflow-hidden border-0 bg-gradient-to-br from-[#1f2f74] via-[#243b86] to-[#2a4694] text-white shadow-[0_10px_22px_rgba(31,47,116,0.18)]"
             >
-              <CardContent className="p-5">
-                <div className="space-y-4">
+              <CardContent className="flex flex-1 flex-col p-5">
+                <div className="flex flex-1 flex-col gap-4">
                   <div className="flex items-start justify-between gap-2 min-[1500px]:gap-3">
                     <div className="min-w-0">
                       <p className="whitespace-nowrap text-[0.65rem] font-semibold uppercase tracking-[0.08em] text-white/60 min-[1500px]:text-xs min-[1500px]:tracking-wide">
@@ -727,8 +727,8 @@ export default function AdminReview({
                     <div className="min-w-0 text-right">
                       <p className="text-xs text-white/55">Planning Balance</p>
                       <p
-                        className={`mt-1 truncate text-sm font-semibold ${
-                          Number(stats.variance || 0) < 0 ? "text-rose-100" : ""
+                        className={`mt-1 whitespace-normal break-words text-sm font-semibold leading-snug ${
+                          Number(stats.variance || 0) < 0 ? "text-red-300" : ""
                         }`}
                         title={formatPlanningBalance(stats.variance)}
                       >
@@ -737,7 +737,7 @@ export default function AdminReview({
                     </div>
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="mt-auto flex gap-2 pt-2">
                     <Button
                       size="sm"
                       onClick={() => setActiveUnitBudgetModal(unit)}
