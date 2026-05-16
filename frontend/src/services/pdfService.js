@@ -1,4 +1,4 @@
-import logoUrl from "../assets/logo.png";
+import logoUrl from "../assets/dtilogo.png";
 
 const MONTH_ORDER = [
   "january",
@@ -14,6 +14,8 @@ const MONTH_ORDER = [
   "november",
   "december",
 ];
+const HEADER_LOGO_WIDTH = 39;
+const HEADER_LOGO_HEIGHT = 20;
 
 function formatCurrency(value) {
   return new Intl.NumberFormat("en-PH", {
@@ -214,12 +216,12 @@ async function generateWithJsPdf(entry, controlNumber, filename) {
 
   try {
     const logoDataUrl = await loadImageDataUrl(logoUrl);
-    doc.addImage(logoDataUrl, "PNG", margin + 2, y + 2, 46, 17);
+    doc.addImage(logoDataUrl, "PNG", margin + 2, y + 2, HEADER_LOGO_WIDTH, HEADER_LOGO_HEIGHT);
   } catch {
     // Ignore logo issue in fallback mode.
   }
 
-  const headerCenterX = margin + ((contentWidth + 46) / 2);
+  const headerCenterX = margin + ((contentWidth + HEADER_LOGO_WIDTH) / 2);
   doc.setFont("helvetica", "bold").setFontSize(15);
   doc.text("DEPARTMENT OF TRADE AND INDUSTRY", headerCenterX, y + 7, { align: "center" });
   y += 6;
