@@ -317,6 +317,7 @@ export default function SubmitEntry({
   entryToEdit,
   onSaveEditedEntry,
   clearEditingEntry,
+  onStartNewEntry,
   submissionWindow,
   draftState,
   onDraftChange,
@@ -454,6 +455,16 @@ export default function SubmitEntry({
   const scheduleStepUpdate = useCallback((nextStep) => {
     window.setTimeout(() => setStep(nextStep), 0);
   }, []);
+
+  const handleCreateNewEntry = useCallback(() => {
+    onStartNewEntry?.();
+    clearEditingEntry?.();
+    onClearDraft?.();
+    hydratedFormKeyRef.current = "";
+    reset(defaultFormValues);
+    setTargetValidationMessage("");
+    scheduleStepUpdate(1);
+  }, [clearEditingEntry, onClearDraft, onStartNewEntry, reset, scheduleStepUpdate]);
 
   const unitOptions = useMemo(() => {
     return sortTemplateKeys([...new Set((templateData?.unitOptions || []).map((item) => item.value))]);
@@ -1013,13 +1024,25 @@ export default function SubmitEntry({
 
   return (
     <div className="w-full space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-          {isEditingReturnedEntry ? "Edit Returned Entry" : "Submit Entry"}
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Complete the AWPB entry in three guided steps.
-        </p>
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+            {isEditingReturnedEntry ? "Edit Returned Entry" : "Submit Entry"}
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Complete the AWPB entry in three guided steps.
+          </p>
+        </div>
+
+        {isEditingReturnedEntry && (
+          <Button
+            type="button"
+            onClick={handleCreateNewEntry}
+            className="w-fit border-0 bg-gradient-to-r from-[#1f2f74] to-[#2a4694] text-white shadow-[0_6px_16px_rgba(31,47,116,0.28)] transition-all duration-200 hover:from-[#19265f] hover:to-[#213a80] hover:shadow-[0_10px_24px_rgba(31,47,116,0.38)]"
+          >
+            Create New Entry
+          </Button>
+        )}
       </div>
 
       {!windowOpen && (

@@ -94,7 +94,7 @@ function StatCard({ title, value, icon, highlight = false }) {
   );
 }
 
-export default function Home({ entries = [], submissionWindow }) {
+export default function Home({ entries = [], submissionWindow, onStartNewEntry }) {
   const windowOpen = isSubmissionWindowOpen(submissionWindow);
 
   const stats = useMemo(() => {
@@ -146,7 +146,7 @@ export default function Home({ entries = [], submissionWindow }) {
             asChild
             className="border-0 bg-gradient-to-r from-[#1f2f74] to-[#2a4694] text-white shadow-[0_6px_16px_rgba(31,47,116,0.28)] transition-all duration-200 hover:from-[#19265f] hover:to-[#213a80] hover:shadow-[0_10px_24px_rgba(31,47,116,0.38)]"
           >
-            <Link to="/submit">Add New Entry</Link>
+            <Link to="/submit" onClick={onStartNewEntry}>Add New Entry</Link>
           </Button>
 
         </div>

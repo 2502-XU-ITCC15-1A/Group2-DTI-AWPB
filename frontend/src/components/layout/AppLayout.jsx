@@ -158,6 +158,7 @@ export default function AppLayout({
                 <NavLink
                   key={item.to}
                   to={item.to}
+                  onClick={item.onClick}
                   className={({ isActive }) =>
                     `flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition ${
                       isActive
