@@ -629,37 +629,16 @@ export default function AdminReview({
       </div>
       
       <Card className="border-0 bg-gradient-to-br from-[#6ea3a6] via-[#4f8f93] to-[#2f7f86] text-white shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
-        <CardContent className="p-4 md:p-5">
-          <div className="grid gap-5 xl:grid-cols-[1fr_auto] xl:items-center">
-            <div>
-              <p className="text-base font-semibold text-white">
+        <CardContent className="px-4 py-4 md:px-5">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-2xl font-bold tracking-tight text-white">
                 Planning Summary
-              </p>
-              <p className="mt-1 max-w-2xl text-sm text-white/85">
-                Approvals can exceed estimates during planning. Use the planning balance to adjust the final AWPB budget.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-              <div className="grid gap-2 sm:grid-cols-3">
-                <div className="min-w-[150px] rounded-2xl bg-white/14 px-4 py-2.5">
-                  <p className="text-xs font-medium text-white/70">Planning Estimate</p>
-                  <p className="text-base font-bold text-white">
-                    ₱{totalPlanningEstimate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                </div>
-                <div className="min-w-[150px] rounded-2xl bg-white/14 px-4 py-2.5">
-                  <p className="text-xs font-medium text-white/70">Approved Plan</p>
-                  <p className="text-base font-bold text-white">
-                    ₱{totalApprovedBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                </div>
-                <div className="min-w-[150px] rounded-2xl bg-white/22 px-4 py-2.5">
-                  <p className="text-xs font-medium text-white/75">Planning Balance</p>
-                  <p className={`text-base font-bold ${totalVariance < 0 ? "text-rose-100" : "text-white"}`}>
-                    {formatPlanningBalance(totalVariance)}
-                  </p>
-                </div>
+                </p>
+                <p className="mt-0.5 max-w-3xl text-sm text-white/85">
+                  Total AWPB planning view across all units.
+                </p>
               </div>
 
               <Button
@@ -670,6 +649,27 @@ export default function AdminReview({
                 <History className="mr-2 h-4 w-4" />
                 View Records
               </Button>
+            </div>
+
+            <div className="grid gap-2.5 md:grid-cols-3">
+              <div className="rounded-2xl bg-white/16 px-4 py-3 shadow-inner shadow-white/5">
+                <p className="text-sm font-medium text-white/70">Planning Estimate</p>
+                <p className="mt-1 text-2xl font-bold leading-none text-white">
+                  {formatCurrency(totalPlanningEstimate)}
+                </p>
+              </div>
+              <div className="rounded-2xl bg-white/18 px-4 py-3 shadow-inner shadow-white/5">
+                <p className="text-sm font-medium text-white/70">Approved Plan</p>
+                <p className="mt-1 text-2xl font-bold leading-none text-white">
+                  {formatCurrency(totalApprovedBudget)}
+                </p>
+              </div>
+              <div className="rounded-2xl bg-white/22 px-4 py-3 shadow-inner shadow-white/5">
+                <p className="text-sm font-medium text-white/75">Planning Balance</p>
+                <p className={`mt-1 whitespace-normal break-words text-2xl font-bold leading-none ${totalVariance < 0 ? "text-red-200" : "text-white"}`}>
+                  {formatPlanningBalance(totalVariance)}
+                </p>
+              </div>
             </div>
           </div>
         </CardContent>

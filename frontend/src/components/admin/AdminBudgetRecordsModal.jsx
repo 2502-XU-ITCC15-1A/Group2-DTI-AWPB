@@ -52,7 +52,7 @@ function getTransactionDisplay(tx) {
     return {
       amountClassName: "text-blue-600",
       label: "APPROVED PLAN",
-      labelClassName: "inline-flex min-w-28 justify-center bg-blue-100 text-blue-700",
+      labelClassName: "inline-flex w-36 justify-center bg-blue-100 text-blue-700",
       prefix: "",
     };
   }
@@ -61,7 +61,7 @@ function getTransactionDisplay(tx) {
     return {
       amountClassName: "text-amber-600",
       label: "PLAN REVERSAL",
-      labelClassName: "inline-flex min-w-28 justify-center bg-amber-100 text-amber-700",
+      labelClassName: "inline-flex w-36 justify-center bg-amber-100 text-amber-700",
       prefix: "",
     };
   }
@@ -69,16 +69,16 @@ function getTransactionDisplay(tx) {
   if (tx.type === "ADDED") {
     return {
       amountClassName: "text-green-600",
-      label: "ESTIMATE +",
-      labelClassName: "inline-flex min-w-24 justify-center bg-green-100 text-green-700",
+      label: "ADDED",
+      labelClassName: "inline-flex w-28 justify-center bg-green-100 text-green-700",
       prefix: "+",
     };
   }
 
   return {
     amountClassName: "text-red-600",
-    label: "ESTIMATE -",
-    labelClassName: "inline-flex min-w-24 justify-center bg-red-100 text-red-700",
+    label: "DEDUCTED",
+    labelClassName: "inline-flex w-28 justify-center bg-red-100 text-red-700",
     prefix: "-",
   };
 }
@@ -239,7 +239,7 @@ export default function AdminBudgetRecordsModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4 py-6">
-      <div className="flex max-h-[88vh] w-full max-w-[1180px] flex-col overflow-hidden rounded-[1.75rem] bg-[#edf4f3] shadow-[0_24px_70px_rgba(15,23,42,0.35)]">
+      <div className="flex max-h-[88vh] w-full max-w-[1320px] flex-col overflow-hidden rounded-[1.75rem] bg-[#edf4f3] shadow-[0_24px_70px_rgba(15,23,42,0.35)]">
         <div className="flex items-start justify-between gap-4 bg-gradient-to-br from-[#6ea3a6] via-[#4f8f93] to-[#2f7f86] px-6 py-5 text-white">
           <div className="flex items-center gap-3">
             <div className="rounded-2xl bg-white/18 p-3">
@@ -333,9 +333,9 @@ export default function AdminBudgetRecordsModal({
             <table className="w-full table-fixed overflow-hidden rounded-2xl bg-white text-sm shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
               <colgroup>
                 <col className="w-[190px]" />
-                <col className="w-[140px]" />
-                <col className="w-[140px]" />
-                <col className="w-[150px]" />
+                <col className="w-[120px]" />
+                <col className="w-[200px]" />
+                <col className="w-[170px]" />
                 <col className="w-[180px]" />
                 <col />
               </colgroup>
