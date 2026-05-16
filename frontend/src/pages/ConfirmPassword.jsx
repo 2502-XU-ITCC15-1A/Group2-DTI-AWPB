@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { getPasswordPolicyError, PASSWORD_POLICY_MESSAGE } from "../lib/passwordPolicy";
 import { authService } from "../services/supabaseService";
 
 export default function ConfirmPassword() {
@@ -94,8 +95,12 @@ export default function ConfirmPassword() {
       return;
     }
 
-    if (formData.newPassword.length < 8) {
-      setError("Password must be at least 8 characters long.");
+    const passwordError = getPasswordPolicyError(formData.newPassword, {
+      required: true,
+    });
+
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
 
@@ -160,7 +165,7 @@ export default function ConfirmPassword() {
               disabled={isLoading || !isRecoveryReady}
             />
             <p className="mt-2 text-xs text-slate-500">
-              Password must be at least 8 characters long.
+              {PASSWORD_POLICY_MESSAGE}
             </p>
           </div>
 

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { getPasswordPolicyError } from "@/lib/passwordPolicy";
 
 // === SUPABASE INTEGRATION ===
 // We import `usersService` which is our thin wrapper around Supabase's client.
@@ -237,8 +238,12 @@ export default function ManageAccounts({
     }
 
     if (editForm.password || editForm.confirmPassword) {
-      if (editForm.password.length < 8) {
-        nextErrors.password = "Password must be at least 8 characters.";
+      const passwordError = getPasswordPolicyError(editForm.password, {
+        required: true,
+      });
+
+      if (passwordError) {
+        nextErrors.password = passwordError;
       }
 
       if (editForm.password !== editForm.confirmPassword) {

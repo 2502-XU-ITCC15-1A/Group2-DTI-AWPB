@@ -17,18 +17,10 @@ import {
 
 const INITIAL_ACCOUNTS = [];
 const ADMIN_VIEW_STORAGE_KEY = "awpb_admin_active_view";
-const SESSION_ACTIVITY_STORAGE_KEY = "awpb_last_activity_at";
+const SESSION_EXPIRES_AT_STORAGE_KEY = "awpb_session_expires_at";
 const SESSION_TIMEOUT_MS = 10 * 60 * 1000;
 const SESSION_TIMEOUT_NOTICE =
-  "Your session expired after 10 minutes of inactivity. Please sign in again.";
-const SESSION_ACTIVITY_EVENTS = [
-  "click",
-  "keydown",
-  "mousemove",
-  "pointerdown",
-  "scroll",
-  "touchstart",
-];
+  "Your session expired after 10 minutes. Please sign in again.";
 
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ConfirmPassword = lazy(() => import("./pages/ConfirmPassword"));
@@ -58,22 +50,24 @@ function createInitialTemplateState() {
   return JSON.parse(JSON.stringify(initialTemplateData));
 }
 
-function getStoredSessionActivityAt() {
-  const storedValue = Number(window.localStorage.getItem(SESSION_ACTIVITY_STORAGE_KEY));
+function getStoredSessionExpiresAt() {
+  const storedValue = Number(window.localStorage.getItem(SESSION_EXPIRES_AT_STORAGE_KEY));
   return Number.isFinite(storedValue) && storedValue > 0 ? storedValue : null;
 }
 
-function markSessionActivity(timestamp = Date.now()) {
-  window.localStorage.setItem(SESSION_ACTIVITY_STORAGE_KEY, String(timestamp));
+function startSessionExpiration(timestamp = Date.now()) {
+  const expiresAt = timestamp + SESSION_TIMEOUT_MS;
+  window.localStorage.setItem(SESSION_EXPIRES_AT_STORAGE_KEY, String(expiresAt));
+  return expiresAt;
 }
 
-function clearSessionActivity() {
-  window.localStorage.removeItem(SESSION_ACTIVITY_STORAGE_KEY);
+function clearSessionExpiration() {
+  window.localStorage.removeItem(SESSION_EXPIRES_AT_STORAGE_KEY);
 }
 
 function hasSessionExpired(timestamp = Date.now()) {
-  const lastActivityAt = getStoredSessionActivityAt();
-  return Boolean(lastActivityAt && timestamp - lastActivityAt >= SESSION_TIMEOUT_MS);
+  const expiresAt = getStoredSessionExpiresAt();
+  return Boolean(expiresAt && timestamp >= expiresAt);
 }
 
 function PageLoadingFallback() {
@@ -103,7 +97,6 @@ function App() {
   const toastTimeoutRef = useRef(null);
   const toastDismissRef = useRef(null);
   const sessionExpiredRef = useRef(false);
-  const sessionActivityWriteRef = useRef(0);
   const authUserId = authUser?.id;
   const authUserRole = authUser?.role;
 
@@ -146,7 +139,7 @@ function App() {
     setAuthUser(null);
     setActiveView(null);
     window.localStorage.removeItem(ADMIN_VIEW_STORAGE_KEY);
-    clearSessionActivity();
+    clearSessionExpiration();
     setEntryBeingEdited(null);
     setSubmitEntryDraft(null);
   }, []);
@@ -222,7 +215,7 @@ async function loadTemplate() {
       try {
         if (hasSessionExpired()) {
           setLoginNotice(SESSION_TIMEOUT_NOTICE);
-          clearSessionActivity();
+          clearSessionExpiration();
           await authService.signOut();
           navigate("/login", { replace: true });
           return;
@@ -235,7 +228,9 @@ async function loadTemplate() {
             await authService.signOut();
             return;
           }
-          markSessionActivity();
+          if (!getStoredSessionExpiresAt()) {
+            startSessionExpiration();
+          }
           sessionExpiredRef.current = false;
           setAuthUser({
             id: user.id,
@@ -261,7 +256,7 @@ async function loadTemplate() {
         setActiveView(null);
         setIsRecoveryMode(false);
         window.localStorage.removeItem(ADMIN_VIEW_STORAGE_KEY);
-        clearSessionActivity();
+        clearSessionExpiration();
       }
       if (event === 'PASSWORD_RECOVERY') {
         setIsRecoveryMode(true);
@@ -282,36 +277,20 @@ async function loadTemplate() {
     const scheduleExpirationCheck = () => {
       window.clearTimeout(timeoutId);
 
-      let lastActivityAt = getStoredSessionActivityAt();
-      if (!lastActivityAt) {
-        lastActivityAt = Date.now();
-        markSessionActivity(lastActivityAt);
-        sessionActivityWriteRef.current = lastActivityAt;
+      let expiresAt = getStoredSessionExpiresAt();
+      if (!expiresAt) {
+        expiresAt = startSessionExpiration();
       }
 
-      const remainingMs = SESSION_TIMEOUT_MS - (Date.now() - lastActivityAt);
+      const remainingMs = expiresAt - Date.now();
       if (remainingMs <= 0) {
         void expireSession();
         return;
       }
 
       timeoutId = window.setTimeout(() => {
-        if (hasSessionExpired()) {
-          void expireSession();
-          return;
-        }
-
-        scheduleExpirationCheck();
+        void expireSession();
       }, remainingMs);
-    };
-
-    const markActive = () => {
-      const now = Date.now();
-      if (now - sessionActivityWriteRef.current < 15000) return;
-
-      sessionActivityWriteRef.current = now;
-      markSessionActivity(now);
-      scheduleExpirationCheck();
     };
 
     const handleVisibilityChange = () => {
@@ -321,11 +300,11 @@ async function loadTemplate() {
         return;
       }
 
-      markActive();
+      scheduleExpirationCheck();
     };
 
-    const handleActivityStorageChange = (event) => {
-      if (event.key !== SESSION_ACTIVITY_STORAGE_KEY || !event.newValue) return;
+    const handleExpirationStorageChange = (event) => {
+      if (event.key !== SESSION_EXPIRES_AT_STORAGE_KEY || !event.newValue) return;
 
       if (hasSessionExpired()) {
         void expireSession();
@@ -336,26 +315,18 @@ async function loadTemplate() {
     };
 
     sessionExpiredRef.current = false;
-    sessionActivityWriteRef.current = getStoredSessionActivityAt() || 0;
-    if (!sessionActivityWriteRef.current) {
-      sessionActivityWriteRef.current = Date.now();
-      markSessionActivity(sessionActivityWriteRef.current);
+    if (!getStoredSessionExpiresAt()) {
+      startSessionExpiration();
     }
 
     scheduleExpirationCheck();
-    SESSION_ACTIVITY_EVENTS.forEach((eventName) => {
-      window.addEventListener(eventName, markActive, { passive: true });
-    });
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("storage", handleActivityStorageChange);
+    window.addEventListener("storage", handleExpirationStorageChange);
 
     return () => {
       window.clearTimeout(timeoutId);
-      SESSION_ACTIVITY_EVENTS.forEach((eventName) => {
-        window.removeEventListener(eventName, markActive);
-      });
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("storage", handleActivityStorageChange);
+      window.removeEventListener("storage", handleExpirationStorageChange);
     };
   }, [authUserId, expireSession, isRecoveryMode]);
 
@@ -648,7 +619,7 @@ async function loadTemplate() {
 
   const handleLogin = (user) => {
     setLoginNotice("");
-    markSessionActivity();
+    startSessionExpiration();
     sessionExpiredRef.current = false;
 
     if (user.role === "admin") {

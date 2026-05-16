@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { getPasswordPolicyError } from '../lib/passwordPolicy';
 import { getUnitLookupValues, normalizeUnitCode } from '../lib/units';
 
 const ENTRY_SELECT_WITH_REVIEWER = `
@@ -74,6 +75,9 @@ function isBlankClassification(value) {
 // Authentication services
 export const authService = {
   async signUp(email, password, metadata = {}) {
+    const passwordError = getPasswordPolicyError(password, { required: true });
+    if (passwordError) throw new Error(passwordError);
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -134,6 +138,9 @@ export const authService = {
   },
 
   async updatePassword(newPassword) {
+    const passwordError = getPasswordPolicyError(newPassword, { required: true });
+    if (passwordError) throw new Error(passwordError);
+
     const { data, error } = await supabase.auth.updateUser({
       password: newPassword,
     });
@@ -190,6 +197,9 @@ export const usersService = {
   },
 
   async create(userData) {
+    const passwordError = getPasswordPolicyError(userData.password, { required: true });
+    if (passwordError) throw new Error(passwordError);
+
     const { data, error } = await supabase
       .rpc('admin_create_user_account', {
         p_username: userData.username,
@@ -221,6 +231,11 @@ export const usersService = {
   },
 
   async updateAccount(userId, userData) {
+    if (userData.password) {
+      const passwordError = getPasswordPolicyError(userData.password, { required: true });
+      if (passwordError) throw new Error(passwordError);
+    }
+
     const { data, error } = await supabase
       .rpc('admin_update_user_account', {
         p_user_id: userId,

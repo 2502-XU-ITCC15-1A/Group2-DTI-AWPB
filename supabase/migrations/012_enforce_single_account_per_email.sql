@@ -141,6 +141,30 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.get_email_by_username(text) TO anon, authenticated;
 
+CREATE OR REPLACE FUNCTION public.validate_password_policy(p_password text)
+RETURNS void
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+BEGIN
+    IF COALESCE(p_password, '') = '' THEN
+        RAISE EXCEPTION 'Password is required.'
+            USING ERRCODE = '22023';
+    END IF;
+
+    IF length(p_password) < 8
+        OR p_password !~ '[A-Z]'
+        OR p_password !~ '[a-z]'
+        OR p_password !~ '[0-9]'
+        OR p_password !~ '[^A-Za-z0-9[:space:]]' THEN
+        RAISE EXCEPTION 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.'
+            USING ERRCODE = '22023';
+    END IF;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.validate_password_policy(text) FROM PUBLIC;
+
 CREATE OR REPLACE FUNCTION public.admin_create_user_account(
     p_username text,
     p_full_name text,
@@ -176,10 +200,7 @@ BEGIN
             USING ERRCODE = '22023';
     END IF;
 
-    IF length(p_password) < 8 THEN
-        RAISE EXCEPTION 'Password must be at least 8 characters.'
-            USING ERRCODE = '22023';
-    END IF;
+    PERFORM public.validate_password_policy(p_password);
 
     IF EXISTS (SELECT 1 FROM public.profiles WHERE lower(username) = v_username) THEN
         RAISE EXCEPTION 'This username is already assigned to another account.'
@@ -352,9 +373,8 @@ BEGIN
             USING ERRCODE = '22023';
     END IF;
 
-    IF p_password IS NOT NULL AND p_password <> '' AND length(p_password) < 8 THEN
-        RAISE EXCEPTION 'Password must be at least 8 characters.'
-            USING ERRCODE = '22023';
+    IF p_password IS NOT NULL AND p_password <> '' THEN
+        PERFORM public.validate_password_policy(p_password);
     END IF;
 
     IF EXISTS (

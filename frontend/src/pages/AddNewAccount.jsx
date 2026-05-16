@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { Input } from "@/components/ui/input";
 
+import { getPasswordPolicyError, PASSWORD_POLICY_MESSAGE } from "@/lib/passwordPolicy";
+
 import { usersService } from "@/services/supabaseService";
 
 
@@ -166,14 +168,10 @@ export default function AddNewAccount({
 
 
 
-    if (!form.password) {
+    const passwordError = getPasswordPolicyError(form.password, { required: true });
 
-      nextErrors.password = "Password is required.";
-
-    } else if (form.password.length < 8) {
-
-      nextErrors.password = "Password must be at least 8 characters.";
-
+    if (passwordError) {
+      nextErrors.password = passwordError;
     }
 
 
@@ -410,6 +408,10 @@ export default function AddNewAccount({
                   <p className="mt-1 text-xs text-red-600">{errors.password}</p>
 
                 )}
+
+                <p className="mt-2 text-xs text-slate-500">
+                  {PASSWORD_POLICY_MESSAGE}
+                </p>
 
               </div>
 

@@ -1,7 +1,9 @@
-import { X } from "lucide-react";
+import { useState } from "react";
+import { Eye, EyeOff, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PASSWORD_POLICY_MESSAGE } from "@/lib/passwordPolicy";
 
 export default function AdminEditUserModal({
   open,
@@ -11,6 +13,9 @@ export default function AdminEditUserModal({
   onFieldChange,
   onSave,
 }) {
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   if (!open) return null;
 
   return (
@@ -97,31 +102,54 @@ export default function AdminEditUserModal({
               <label className="mb-2 block text-sm font-semibold text-slate-700">
                 Password
               </label>
-              <Input
-                name="password"
-                type="password"
-                value={form.password}
-                onChange={onFieldChange}
-                placeholder="New password"
-                className="h-11 rounded-xl border-slate-200 bg-white px-4"
-              />
+              <div className="relative">
+                <Input
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  value={form.password}
+                  onChange={onFieldChange}
+                  placeholder="New password"
+                  className="h-11 rounded-xl border-slate-200 bg-white px-4 pr-11"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((current) => !current)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-500 transition hover:text-slate-700"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
               {errors.password && (
                 <p className="mt-1 text-xs text-red-600">{errors.password}</p>
               )}
+              <p className="mt-2 text-xs text-slate-500">
+                {PASSWORD_POLICY_MESSAGE}
+              </p>
             </div>
 
             <div>
               <label className="mb-2 block text-sm font-semibold text-slate-700">
                 Confirm Password
               </label>
-              <Input
-                name="confirmPassword"
-                type="password"
-                value={form.confirmPassword}
-                onChange={onFieldChange}
-                placeholder="Confirm password"
-                className="h-11 rounded-xl border-slate-200 bg-white px-4"
-              />
+              <div className="relative">
+                <Input
+                  name="confirmPassword"
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={form.confirmPassword}
+                  onChange={onFieldChange}
+                  placeholder="Confirm password"
+                  className="h-11 rounded-xl border-slate-200 bg-white px-4 pr-11"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((current) => !current)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-500 transition hover:text-slate-700"
+                  aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                >
+                  {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
               {errors.confirmPassword && (
                 <p className="mt-1 text-xs text-red-600">
                   {errors.confirmPassword}
