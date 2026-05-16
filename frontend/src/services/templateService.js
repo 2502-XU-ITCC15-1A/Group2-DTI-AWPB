@@ -173,35 +173,6 @@ function buildHierarchyRows({ components = [], subComponents = [], keyActivities
   return rows;
 }
 
-// READ TABLES
-export const getComponents = () =>
-  supabase.from("components").select("*").order("sort_order");
-
-export const getSubComponents = () =>
-  supabase.from("sub_components").select("*").order("sort_order");
-
-export const getKeyActivities = () =>
-  supabase
-    .from("key_activities")
-    .select("id, sub_component_id, name, code, activity_no, sort_order, is_active")
-    .order("sort_order");
-
-export const getSubActivities = async () => {
-  const response = await supabase
-    .from("sub_activities")
-    .select("id, performance_indicator_id, key_activity_id, name, code, sort_order, is_active");
-  if (!response.error?.message?.includes("performance_indicator_id")) {
-    return response;
-  }
-
-  return supabase
-    .from("sub_activities")
-    .select("id, key_activity_id, name, code, sort_order, is_active");
-};
-
-export const getUnits = () =>
-  supabase.from("units").select("*").order("name");
-
 // Full hierarchy read used after refresh. Reading the base tables avoids stale
 // `template_hierarchy` views that omit partial branches or the PI table.
 export const getTemplateHierarchy = async () => {
@@ -237,6 +208,3 @@ export const getTemplateHierarchy = async () => {
     error: null,
   };
 };
-
-export const getPerformance_indicators = () =>
-  supabase.from("performance_indicators").select("*");

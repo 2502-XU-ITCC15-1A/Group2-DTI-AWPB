@@ -22,10 +22,6 @@ export function normalizeUnitCode(unit) {
   return UNIT_CODE_BY_ALIAS[normalized] || normalized || "N/A";
 }
 
-export function isKnownUnit(unit) {
-  return UNIT_CODES.includes(normalizeUnitCode(unit));
-}
-
 export function getUnitLookupValues(unit) {
   const code = normalizeUnitCode(unit);
   return [...new Set([unit, code, ...(UNIT_ALIASES[code] || [])].filter(Boolean))];

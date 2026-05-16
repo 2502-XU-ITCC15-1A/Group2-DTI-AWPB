@@ -737,17 +737,9 @@ export default function ManageTemplate({
         sort_order: subActivityItems.length + 1,
         is_active: true,
       };
-      console.log('[ManageTemplate.addSubActivity] Prepared payload', {
-        component: selectedComponent,
-        subComponent: selectedSubComponent,
-        keyActivity: selectedKeyActivity,
-        selectedIndicator,
-        payload: subActivityPayload,
-      });
       // Pass both IDs because older Supabase schemas persist sub activities by
       // key_activity_id, while newer ones may use performance_indicator_id.
       const savedSubActivity = await templateMgmtService.createSubActivity(subActivityPayload);
-      console.log('[ManageTemplate.addSubActivity] Saved row returned from Supabase', savedSubActivity);
       const savedName = savedSubActivity.name || nextText;
       updateTemplate((nextTemplate) => {
         const bucket = nextTemplate.hierarchy[selectedComponent]?.[selectedSubComponent]?.[selectedKeyActivity] || [];

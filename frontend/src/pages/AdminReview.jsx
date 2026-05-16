@@ -467,7 +467,6 @@ export default function AdminReview({
       setDeleteActionBusy(false);
     }
   };
-  //connects sa supabase
   const loadBudgetData = useCallback(async () => {
     try {
       let {data: txData, error: txError} = await supabase

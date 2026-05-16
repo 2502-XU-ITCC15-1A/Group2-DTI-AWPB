@@ -5,11 +5,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
-// === SUPABASE INTEGRATION (dropdowns only) ===
-// We load the AWPB template hierarchy and unit list from Supabase so the
-// dropdowns show live data that admins can edit through Manage Template.
-// The JSON file passed in via `templateData` is still used as a fallback
-// until the network request finishes (and as a safety net if it fails).
 import { templateService } from "../services/supabaseService";
 import { normalizeUnitCode } from "../lib/units";
 

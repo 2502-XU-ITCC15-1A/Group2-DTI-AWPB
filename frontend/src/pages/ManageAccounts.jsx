@@ -9,37 +9,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { getPasswordPolicyError } from "@/lib/passwordPolicy";
-
-// === SUPABASE INTEGRATION ===
-// We import `usersService` which is our thin wrapper around Supabase's client.
-// Previously this page received hardcoded dummy accounts via props and only
-// updated them in local React state (nothing was persisted). Now we load the
-// real users from the `profiles` table in Supabase and save every change back
-// to the database.
 import { usersService } from "@/services/supabaseService";
 
-// ---------------------------------------------------------------------------
-// FIX #1: Data shape mismatch
-// ---------------------------------------------------------------------------
-// Supabase's `profiles` table uses snake_case column names (e.g. `full_name`)
-// while our UI components expect camelCase (e.g. `fullName`). We use these two
-// helper functions to translate between the two formats so the rest of the
-// component code doesn't have to change.
-// ---------------------------------------------------------------------------
-
-// Convert a Supabase `profiles` row  -> the shape this page's UI expects.
 function mapProfileToAccount(profile) {
   return {
     id: profile.id,
     username: profile.username,
-    fullName: profile.full_name, // snake_case -> camelCase
+    fullName: profile.full_name,
     email: profile.email,
     role: profile.role,
     status: profile.status,
   };
 }
 
-// Convert UI-style updates  -> the `profiles` column names used by Supabase.
 function mapUpdatesToProfile(updates) {
   const payload = {};
   if (updates.username !== undefined) payload.username = updates.username;
@@ -82,36 +64,13 @@ export default function ManageAccounts({
   const [editErrors, setEditErrors] = useState({});
   const [deactivateTarget, setDeactivateTarget] = useState(null);
 
-  // -------------------------------------------------------------------------
-  // FIX #2: Page now owns the list of accounts instead of relying on props
-  // -------------------------------------------------------------------------
-  // Before: this page only displayed whatever `accounts` prop was passed from
-  //   App.jsx (a hardcoded INITIAL_ACCOUNTS array). It could never see the
-  //   real users in Supabase.
-  // After:  we keep the prop as an initial fallback (so the UI isn't blank
-  //   during the fetch) and sync it with the parent state.
-  // -------------------------------------------------------------------------
   const [accounts, setAccounts] = useState(accountsProp);
 
   useEffect(() => {
     setAccounts(accountsProp);
   }, [accountsProp]);
 
-  // -------------------------------------------------------------------------
-  // FIX #4: Persist every account change to Supabase (not just local state)
-  // -------------------------------------------------------------------------
-  // This helper is reused by edit, deactivate, and activate. Steps:
-  //   1. Update the UI immediately (optimistic update) so the admin sees the
-  //      change without waiting for the network.
-  //   2. Call `usersService.update(...)` which issues an UPDATE on the
-  //      `profiles` row in Supabase. Supabase's RLS policy only lets admins
-  //      perform this update.
-  //   3. If it succeeds, also call onUpdateAccount() so App.jsx's copy of the
-  //      accounts stays in sync.
-  //   4. If it fails, log the error and show an error toast.
-  // -------------------------------------------------------------------------
   const persistAccountUpdate = async (accountId, updates) => {
-    // 1) Optimistic UI update
     setAccounts((prev) =>
       prev.map((account) =>
         account.id === accountId ? { ...account, ...updates } : account,
@@ -119,13 +78,10 @@ export default function ManageAccounts({
     );
 
     try {
-      // 2) Persist to Supabase
       await usersService.update(accountId, mapUpdatesToProfile(updates));
-      // 3) Keep parent state in sync
       onUpdateAccount?.(accountId, updates);
       return true;
     } catch (err) {
-      // 4) Report failure to the admin
       console.error("Failed to update account in Supabase:", err);
       onShowToast?.({
         title: "Could not save changes",
@@ -297,7 +253,6 @@ export default function ManageAccounts({
     })();
   };
 
-  // FIX #4 (deactivate): save the status change to Supabase.
   const handleDeactivate = async () => {
     if (!deactivateTarget) return;
 
@@ -315,7 +270,6 @@ export default function ManageAccounts({
     }
   };
 
-  // FIX #4 (activate): save the status change to Supabase.
   const handleActivate = async (accountId) => {
     const target = accounts.find((account) => account.id === accountId);
 
