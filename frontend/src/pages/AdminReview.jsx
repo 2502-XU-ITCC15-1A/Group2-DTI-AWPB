@@ -41,6 +41,10 @@ function formatPlanningBalance(value) {
   return `${formatCurrency(Math.abs(numericValue))} over estimate`;
 }
 
+function parseAmountInput(value) {
+  return Number(String(value || "").replace(/,/g, ""));
+}
+
 function formatDate(value) {
   if (!value) return "N/A";
   return new Date(value).toLocaleString("en-PH", {
@@ -96,6 +100,7 @@ export default function AdminReview({
   const [yearFilter, setYearFilter] = useState("all");
   const [totalBudget, setTotalBudget] = useState(0);
   const [transactions, setTransactions] = useState([]);
+  const [budgetDataStatus, setBudgetDataStatus] = useState("loading");
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   // Unit-specific budget state
@@ -162,6 +167,18 @@ export default function AdminReview({
 
   const totalPlanningEstimate = totalBudget;
   const totalVariance = totalPlanningEstimate - totalApprovedBudget;
+  const isBudgetDataLoading = budgetDataStatus === "loading";
+  const isBudgetDataUnavailable = budgetDataStatus === "unavailable";
+  const planningEstimateLabel = isBudgetDataLoading
+    ? "Loading..."
+    : isBudgetDataUnavailable
+      ? "Unavailable"
+      : formatCurrency(totalPlanningEstimate);
+  const planningBalanceLabel = isBudgetDataLoading
+    ? "Loading..."
+    : isBudgetDataUnavailable
+      ? "Unavailable"
+      : formatPlanningBalance(totalVariance);
 
   const approvedEntriesByUnit = useMemo(() => {
     return Object.fromEntries(
@@ -476,6 +493,7 @@ export default function AdminReview({
     }
   };
   const loadBudgetData = useCallback(async () => {
+    setBudgetDataStatus("loading");
     try {
       let {data: txData, error: txError} = await supabase
         .from("budget_transactions")
@@ -547,9 +565,11 @@ export default function AdminReview({
     // Total planning estimate = sum of all unit estimate movements.
     const grandTotal = UNITS.reduce((sum, u) => sum + (budgets[u] || 0), 0);
     setTotalBudget(grandTotal);
+    setBudgetDataStatus("ready");
 
     } catch (err) {
       console.error("Failed to load planning budget transactions:", err);
+      setBudgetDataStatus("unavailable");
     }
   }, [UNITS]);
   const closeUnitAllocationModal = () => {
@@ -562,7 +582,7 @@ export default function AdminReview({
   const handleSaveUnitAllocation = async () => {
     if (unitAllocationSaving) return;
 
-    const amount = parseFloat(unitBudgetAmount);
+    const amount = parseAmountInput(unitBudgetAmount);
     const unit = activeUnitBudgetModal;
     if (!amount || amount <= 0) {
       onShowToast?.({
@@ -643,6 +663,7 @@ export default function AdminReview({
 
               <Button
                 onClick={() => setShowHistoryModal(true)}
+                disabled={isBudgetDataLoading}
                 variant="outline"
                 className="w-fit rounded-xl border-white/35 bg-white/10 text-white shadow-sm hover:bg-white/20 hover:text-white"
               >
@@ -655,19 +676,19 @@ export default function AdminReview({
               <div className="rounded-2xl bg-white/16 px-4 py-3 shadow-inner shadow-white/5">
                 <p className="text-sm font-medium text-white/70">Planning Estimate</p>
                 <p className="mt-1 text-2xl font-bold leading-none text-white">
-                  {formatCurrency(totalPlanningEstimate)}
+                  {planningEstimateLabel}
                 </p>
               </div>
               <div className="rounded-2xl bg-white/18 px-4 py-3 shadow-inner shadow-white/5">
-                <p className="text-sm font-medium text-white/70">Approved Plan</p>
-                <p className="mt-1 text-2xl font-bold leading-none text-white">
-                  {formatCurrency(totalApprovedBudget)}
+                <p className="text-sm font-medium text-white/75">Planning Balance</p>
+                <p className={`mt-1 whitespace-normal break-words text-2xl font-bold leading-none ${!isBudgetDataLoading && !isBudgetDataUnavailable && totalVariance < 0 ? "text-red-200" : "text-white"}`}>
+                  {planningBalanceLabel}
                 </p>
               </div>
               <div className="rounded-2xl bg-white/22 px-4 py-3 shadow-inner shadow-white/5">
-                <p className="text-sm font-medium text-white/75">Planning Balance</p>
-                <p className={`mt-1 whitespace-normal break-words text-2xl font-bold leading-none ${totalVariance < 0 ? "text-red-200" : "text-white"}`}>
-                  {formatPlanningBalance(totalVariance)}
+                <p className="text-sm font-medium text-white/70">Approved Plan</p>
+                <p className="mt-1 text-2xl font-bold leading-none text-white">
+                  {formatCurrency(totalApprovedBudget)}
                 </p>
               </div>
             </div>
@@ -686,6 +707,20 @@ export default function AdminReview({
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {UNITS.map((unit) => {
           const stats = unitAllocationStats[unit] || {};
+          const unitEstimateLabel = isBudgetDataLoading
+            ? "Loading..."
+            : isBudgetDataUnavailable
+              ? "Unavailable"
+              : formatCurrency(stats.estimate);
+          const unitBalanceLabel = isBudgetDataLoading
+            ? "Loading..."
+            : isBudgetDataUnavailable
+              ? "Unavailable"
+              : formatPlanningBalance(stats.variance);
+          const isUnitOverEstimate =
+            !isBudgetDataLoading &&
+            !isBudgetDataUnavailable &&
+            Number(stats.variance || 0) < 0;
           return (
             <Card
               key={unit}
@@ -720,19 +755,19 @@ export default function AdminReview({
                   <div className="grid grid-cols-2 gap-3 border-t border-white/15 pt-3">
                     <div className="min-w-0">
                       <p className="text-xs text-white/55">Planning Estimate</p>
-                      <p className="mt-1 truncate text-sm font-semibold" title={formatCurrency(stats.estimate)}>
-                        {formatCurrency(stats.estimate)}
+                      <p className="mt-1 truncate text-sm font-semibold" title={unitEstimateLabel}>
+                        {unitEstimateLabel}
                       </p>
                     </div>
                     <div className="min-w-0 text-right">
                       <p className="text-xs text-white/55">Planning Balance</p>
                       <p
                         className={`mt-1 whitespace-normal break-words text-sm font-semibold leading-snug ${
-                          Number(stats.variance || 0) < 0 ? "text-red-300" : ""
+                          isUnitOverEstimate ? "text-red-300" : ""
                         }`}
-                        title={formatPlanningBalance(stats.variance)}
+                        title={unitBalanceLabel}
                       >
-                        {formatPlanningBalance(stats.variance)}
+                        {unitBalanceLabel}
                       </p>
                     </div>
                   </div>
@@ -741,6 +776,7 @@ export default function AdminReview({
                     <Button
                       size="sm"
                       onClick={() => setActiveUnitBudgetModal(unit)}
+                      disabled={isBudgetDataLoading}
                       className="flex-1 rounded-xl bg-white text-slate-900 hover:bg-slate-100"
                     >
                       <Pencil className="mr-1.5 h-3.5 w-3.5" />
@@ -749,6 +785,7 @@ export default function AdminReview({
                     <Button
                       size="sm"
                       onClick={() => setActiveUnitHistoryModal(unit)}
+                      disabled={isBudgetDataLoading}
                       variant="outline"
                       className="flex-1 rounded-xl border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"
                     >

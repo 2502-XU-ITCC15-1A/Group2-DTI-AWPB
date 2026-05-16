@@ -10,6 +10,20 @@ function formatCurrency(value) {
   });
 }
 
+function formatAmountInput(value) {
+  const cleaned = String(value ?? "").replace(/[^\d.]/g, "");
+  const dotIndex = cleaned.indexOf(".");
+  const hasDecimal = dotIndex !== -1;
+  const rawWhole = hasDecimal ? cleaned.slice(0, dotIndex) : cleaned;
+  const rawFraction = hasDecimal
+    ? cleaned.slice(dotIndex + 1).replace(/\./g, "").slice(0, 2)
+    : "";
+  const whole = (rawWhole || "0").replace(/^0+(?=\d)/, "");
+  const formattedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+  return hasDecimal ? `${formattedWhole}.${rawFraction}` : formattedWhole;
+}
+
 export default function AdminUnitAllocationModal({
   adjustmentType = "ADDED",
   amount,
@@ -98,12 +112,11 @@ export default function AdminUnitAllocationModal({
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">Amount (₱)</label>
             <Input
-              type="number"
-              min="0"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               placeholder="0.00"
               value={amount}
-              onChange={(event) => onAmountChange?.(event.target.value)}
+              onChange={(event) => onAmountChange?.(formatAmountInput(event.target.value))}
               disabled={saving}
               className="h-12 rounded-xl border-slate-200 bg-white text-lg font-medium"
             />

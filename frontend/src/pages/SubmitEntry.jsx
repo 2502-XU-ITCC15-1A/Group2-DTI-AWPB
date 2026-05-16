@@ -597,6 +597,11 @@ export default function SubmitEntry({
   const planningEstimateLabel = isPlanningStatsLoading
     ? "Loading..."
     : formatCurrency(planningEstimate);
+  const approvedPlanTotalLabel = isPlanningStatsLoading
+    ? "Loading..."
+    : isPlanningStatsUnavailable
+      ? "Unavailable"
+      : formatCurrency(approvedPlanTotal);
   const planningBalanceAfterEntryLabel = isPlanningStatsLoading
     ? "Loading..."
     : isPlanningStatsUnavailable
@@ -1511,7 +1516,7 @@ export default function SubmitEntry({
                     <div className="rounded-xl bg-white/14 px-3 py-2.5">
                       <p className="text-xs font-medium text-white/70">Approved Plan</p>
                       <p className="mt-1 text-sm font-semibold text-white">
-                        {formatCurrency(approvedPlanTotal)}
+                        {approvedPlanTotalLabel}
                       </p>
                     </div>
                     <div className="rounded-xl bg-white/14 px-3 py-2.5">
