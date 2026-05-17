@@ -174,7 +174,6 @@ export default function AdminReview({
   const totalPlanningEstimate = totalBudget;
   const totalVariance = totalPlanningEstimate - totalApprovedBudget;
   const isBudgetDataLoading = budgetDataStatus === "loading";
-  const isBudgetDataRefreshing = budgetDataStatus === "refreshing";
   const isBudgetDataUnavailable = budgetDataStatus === "unavailable";
   const planningEstimateLabel = isBudgetDataLoading
     ? "Syncing..."
@@ -684,7 +683,7 @@ export default function AdminReview({
               </div>
 
               <Button
-                onClick={() => setShowHistoryModal(true)}
+                onClick={handleOpenHistoryModal}
                 disabled={isBudgetDataLoading}
                 variant="outline"
                 className="w-fit rounded-xl border-white/35 bg-white/10 text-white shadow-sm hover:bg-white/20 hover:text-white"
