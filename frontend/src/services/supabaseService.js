@@ -686,7 +686,7 @@ export const templateService = {
     const [compRes, scRes, kaRes, piRes, initialSaRes] = await Promise.all([
       supabase.from('components').select('id, name, sort_order').eq('is_active', true).order('sort_order'),
       supabase.from('sub_components').select('id, name, component_id, sort_order').eq('is_active', true).order('sort_order'),
-      supabase.from('key_activities').select('id, name, sub_component_id, sort_order').eq('is_active', true).order('sort_order'),
+      supabase.from('key_activities').select('id, name, sub_component_id, activity_no, performance_indicator, sort_order').eq('is_active', true).order('sort_order'),
       supabase.from('performance_indicators').select('id, key_activity_id, activity_no, label, sort_order').eq('is_active', true).order('sort_order'),
       supabase.from('sub_activities').select('id, name, performance_indicator_id, key_activity_id, sort_order').eq('is_active', true).order('sort_order'),
     ]);
@@ -772,6 +772,26 @@ export const templateService = {
 
       const pis = piByKa[ka.id] || [];
       if (pis.length === 0) {
+        const hasLegacyIndicator =
+          ka.activity_no !== null &&
+          ka.activity_no !== undefined &&
+          ka.activity_no !== "";
+
+        if (hasLegacyIndicator) {
+          const subs = saByKa[ka.id] || [];
+          const rowsToAdd = subs.length > 0 ? subs : [null];
+
+          for (const sa of rowsToAdd) {
+            rows.push({
+              component: comp.name, component_id: comp.id, component_sort_order: comp.sort_order,
+              sub_component: sc.name, sub_component_id: sc.id, sub_component_sort_order: sc.sort_order,
+              key_activity: ka.name, key_activity_id: ka.id, key_activity_sort_order: ka.sort_order,
+              activity_no: ka.activity_no, label: ka.performance_indicator || '', performance_indicator_sort_order: ka.sort_order,
+              sub_activity: sa?.name || null, sub_activity_id: sa?.id || null, sub_activity_sort_order: sa?.sort_order || null,
+            });
+          }
+          continue;
+        }
         // Key activity with no performance indicators yet — emit placeholder row
         rows.push({
           component: comp.name, component_id: comp.id, component_sort_order: comp.sort_order,
@@ -782,7 +802,9 @@ export const templateService = {
         });
       } else {
         for (const pi of pis) {
-          const subs = saByPi[pi.id] || saByKa[ka.id] || [];
+          const piSubs = saByPi[pi.id] || [];
+          const legacySubs = pis.length === 1 ? saByKa[ka.id] || [] : [];
+          const subs = piSubs.length > 0 ? piSubs : legacySubs;
           if (subs.length === 0) {
             rows.push({
               component: comp.name, component_id: comp.id, component_sort_order: comp.sort_order,
