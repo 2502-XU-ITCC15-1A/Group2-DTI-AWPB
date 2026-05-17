@@ -147,7 +147,7 @@ async function loadTemplate() {
     if (!hierarchy[c][s][k]) hierarchy[c][s][k] = [];
 
     // Skip rows without an activity number (placeholder key-activity rows)
-    if (!actNo) return;
+    if (actNo === null || actNo === undefined || actNo === "") return;
 
     // Find or create the entry grouped by activity_no
     const bucket = hierarchy[c][s][k];
