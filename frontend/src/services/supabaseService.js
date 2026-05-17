@@ -649,11 +649,17 @@ export const entriesService = {
   },
 
   async delete(id) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('entries')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .select('id')
+      .maybeSingle();
     if (error) throw error;
+    if (!data) {
+      throw new Error('Entry could not be deleted. You may not have permission to delete it.');
+    }
+    return data;
   },
 };
 

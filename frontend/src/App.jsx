@@ -585,6 +585,7 @@ async function loadTemplate() {
         description: error.message,
         type: "error",
       });
+      throw error;
     }
   };
 

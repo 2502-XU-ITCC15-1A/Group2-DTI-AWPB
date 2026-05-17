@@ -97,6 +97,7 @@ export default function MyEntries({
   const [currentUserId, setCurrentUserId] = useState(null);
   const [pdfExportingEntryId, setPdfExportingEntryId] = useState(null);
   const [editingEntryId, setEditingEntryId] = useState(null);
+  const [deleteActionBusy, setDeleteActionBusy] = useState(false);
   const navigate = useNavigate();
 
   // Get current logged-in user
@@ -172,19 +173,21 @@ export default function MyEntries({
     setYearFilter("all");
   };
 
-  const handleDelete = () => {
-    if (!deleteTarget) return;
-    const entryTitle = deleteTarget.titleOfActivities;
-    onDeleteEntry?.(deleteTarget.id);
-    onShowToast?.({
-      title: "Entry deleted",
-      description: `${entryTitle} was removed from your entries.`,
-      type: "success",
-    });
-    if (selectedEntry?.id === deleteTarget.id) {
-      setSelectedEntry(null);
+  const handleDelete = async () => {
+    if (!deleteTarget || deleteActionBusy) return;
+
+    setDeleteActionBusy(true);
+    try {
+      await onDeleteEntry?.(deleteTarget.id);
+      if (selectedEntry?.id === deleteTarget.id) {
+        setSelectedEntry(null);
+      }
+      setDeleteTarget(null);
+    } catch (error) {
+      console.error("Failed to delete entry:", error);
+    } finally {
+      setDeleteActionBusy(false);
     }
-    setDeleteTarget(null);
   };
 
   const handleExportToPdf = async (entry) => {
@@ -485,6 +488,7 @@ export default function MyEntries({
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         entry={deleteTarget}
         onConfirm={handleDelete}
+        busy={deleteActionBusy}
       />
     </div>
   );
