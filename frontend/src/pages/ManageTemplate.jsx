@@ -97,6 +97,10 @@ function getTemplateLabel(value, emptyLabel) {
   return normalizeName(value) || emptyLabel;
 }
 
+function getFallbackLabel(value) {
+  return getTemplateLabel(value, "N/A");
+}
+
 function logTemplateCrudError(action, error) {
   console.error(`[ManageTemplate.${action}]`, error);
 }
@@ -903,7 +907,7 @@ export default function ManageTemplate({
               onClick={() => setComponentMenuOpen((prev) => !prev)}
               className={dropdownTriggerClass}
             >
-              <span className="truncate">{selectedComponent || "Select component"}</span>
+              <span className="truncate">{selectedComponent || "N/A"}</span>
               <ChevronDown
                 size={16}
                 className={`shrink-0 transition ${componentMenuOpen ? "rotate-180 text-[#2a4694]" : "text-slate-400"}`}
@@ -1063,8 +1067,8 @@ export default function ManageTemplate({
             >
               <span className="truncate">
                 {hasSubComponentSelected
-                  ? getTemplateLabel(selectedSubComponent, "No sub component")
-                  : "Select sub component"}
+                  ? getFallbackLabel(selectedSubComponent)
+                  : "N/A"}
               </span>
               <ChevronDown
                 size={16}
@@ -1077,7 +1081,7 @@ export default function ManageTemplate({
                 <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
                   {subComponentNames.length === 0 ? (
                     <div className={getEmptyStateClass(hasComponentSelected)}>
-                      Select a component to manage its sub components.
+                      N/A
                     </div>
                   ) : (
                     subComponentNames.map((name) => (
@@ -1108,7 +1112,7 @@ export default function ManageTemplate({
                             className="min-w-0 flex-1 text-left text-sm text-slate-700"
                           >
                             <span className="block truncate">
-                              {getTemplateLabel(name, "No sub component")}
+                              {getFallbackLabel(name)}
                             </span>
                           </button>
                         )}
@@ -1154,7 +1158,7 @@ export default function ManageTemplate({
                                   onClick={() =>
                                     setDeleteTarget({
                                       kind: "subComponent",
-                                      label: getTemplateLabel(name, "No sub component"),
+                                      label: getFallbackLabel(name),
                                     })
                                   }
                                   className={deleteActionIconButtonClass}
@@ -1261,7 +1265,7 @@ export default function ManageTemplate({
               className={dropdownTriggerClass}
             >
               <span className="truncate">
-                {hasKeyActivitySelected ? selectedKeyActivity : "Select key activity"}
+                {hasKeyActivitySelected ? selectedKeyActivity : "N/A"}
               </span>
               <ChevronDown
                 size={16}
@@ -1274,7 +1278,7 @@ export default function ManageTemplate({
                 <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
                   {keyActivityNames.length === 0 ? (
                     <div className={getEmptyStateClass(hasSubComponentSelected)}>
-                      Select a sub component to manage key activities.
+                      N/A
                     </div>
                   ) : (
                     keyActivityNames.map((name) => (
@@ -1428,7 +1432,7 @@ export default function ManageTemplate({
               className={dropdownTriggerClass}
             >
               <span className="truncate">
-                {selectedIndicator ? `No. ${selectedIndicator.no}` : "Select performance indicator"}
+                {selectedIndicator ? `No. ${selectedIndicator.no}` : "N/A"}
               </span>
               <ChevronDown
                 size={16}
@@ -1441,7 +1445,7 @@ export default function ManageTemplate({
                 <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
                   {indicatorItems.length === 0 ? (
                     <div className={getEmptyStateClass(hasKeyActivitySelected)}>
-                      Select a key activity to manage its performance indicators.
+                      N/A
                     </div>
                   ) : (
                     indicatorItems.map((item, index) => (
@@ -1637,7 +1641,7 @@ export default function ManageTemplate({
               className={dropdownTriggerClass}
             >
               <span className="truncate">
-                {selectedSubActivity || "Select sub activity"}
+                {selectedSubActivity || "N/A"}
               </span>
               <ChevronDown
                 size={16}
@@ -1650,7 +1654,7 @@ export default function ManageTemplate({
                 <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
                   {subActivityItems.length === 0 ? (
                     <div className={emptyStateClass}>
-                      No sub activities yet for the selected performance indicator.
+                      N/A
                     </div>
                   ) : (
                     subActivityItems.map((item, index) => (
