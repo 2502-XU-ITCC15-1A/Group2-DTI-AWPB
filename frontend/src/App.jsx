@@ -685,8 +685,14 @@ async function loadTemplate() {
     });
   };
 
-  const handleStartEdit = (entry) => {
-    setEntryBeingEdited(entry);
+  const handleStartEdit = async (entry) => {
+    const fullEntry = await entriesService.getById(entry.id);
+    setEntries((prev) =>
+      prev.map((currentEntry) => (currentEntry.id === entry.id ? fullEntry : currentEntry)),
+    );
+    setSubmitEntryDraft(null);
+    setEntryBeingEdited(fullEntry);
+    return fullEntry;
   };
 
   const handleSaveEditedEntry = async (entryId, updatedEntry) => {

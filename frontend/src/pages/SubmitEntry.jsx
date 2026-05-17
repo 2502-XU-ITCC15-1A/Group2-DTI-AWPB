@@ -182,6 +182,21 @@ const MONTHS = [
   { key: "dec", label: "Dec" },
 ];
 
+const MONTH_NAME_BY_KEY = {
+  jan: "january",
+  feb: "february",
+  mar: "march",
+  apr: "april",
+  may: "may",
+  jun: "june",
+  jul: "july",
+  aug: "august",
+  sep: "september",
+  oct: "october",
+  nov: "november",
+  dec: "december",
+};
+
 const CURRENT_YEAR = new Date().getFullYear();
 
 const defaultFormValues = {
@@ -276,28 +291,118 @@ function formatDateOnly(value) {
   });
 }
 
-function buildFormValuesFromEntry(entry) {
+function normalizeMonthKey(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  const found = MONTHS.find(
+    (month) =>
+      month.key === normalized ||
+      month.label.toLowerCase() === normalized ||
+      MONTH_NAME_BY_KEY[month.key] === normalized,
+  );
+
+  return found?.key || "";
+}
+
+function getTemplateValueById(idMap = {}, id, preferredValues = []) {
+  if (!id) return "";
+
+  const preferred = preferredValues.find((value) => idMap[value] === id);
+  if (preferred) return preferred;
+
+  return Object.entries(idMap).find(([, value]) => value === id)?.[0] || "";
+}
+
+function buildFormValuesFromEntry(entry, templateData = {}) {
   const targets = MONTHS.reduce((acc, month) => {
     const found = entry.monthlyBreakdown?.find(
-      (row) => row.month === month.label,
+      (row) => normalizeMonthKey(row.month) === month.key,
     );
     acc[month.key] = found ? found.target : "";
     return acc;
   }, {});
+  const idMap = templateData?.idMap || {};
+  const unitOptions = (templateData?.unitOptions || []).map((item) => item.value);
+  const unitFromId = getTemplateValueById(
+    idMap.units,
+    entry.unitId || entry.unit_id,
+    unitOptions,
+  );
 
   return {
-    planningYear: entry.planningYear || String(CURRENT_YEAR),
-    unit: entry.unit || "",
-    component: entry.component || "",
-    subComponent: entry.subComponent || "",
-    keyActivity: entry.keyActivity || "",
-    no: entry.no ? String(entry.no) : "",
-    performanceIndicator: entry.performanceIndicator || "",
-    subActivity: entry.subActivity || "",
-    titleOfActivities: entry.titleOfActivities || "",
-    unitCost: entry.unitCost ?? "",
+    planningYear: entry.planningYear || entry.planning_year || String(CURRENT_YEAR),
+    unit: normalizeUnitCode(
+      entry.unit || entry.units?.code || entry.units?.name || unitFromId || "",
+    ),
+    component:
+      entry.component ||
+      entry.components?.name ||
+      getTemplateValueById(idMap.components, entry.componentId || entry.component_id),
+    subComponent:
+      entry.subComponent ||
+      entry.sub_components?.name ||
+      getTemplateValueById(idMap.subComponents, entry.subComponentId || entry.sub_component_id),
+    keyActivity:
+      entry.keyActivity ||
+      entry.key_activities?.name ||
+      getTemplateValueById(idMap.keyActivities, entry.keyActivityId || entry.key_activity_id),
+    no: entry.no ? String(entry.no) : String(entry.activity_no || ""),
+    performanceIndicator:
+      entry.performanceIndicator ||
+      entry.performance_indicator ||
+      entry.key_activities?.performance_indicator ||
+      "",
+    subActivity:
+      entry.subActivity ||
+      entry.sub_activities?.name ||
+      getTemplateValueById(idMap.subActivities, entry.subActivityId || entry.sub_activity_id),
+    titleOfActivities: entry.titleOfActivities || entry.title_of_activities || "",
+    unitCost: entry.unitCost ?? entry.unit_cost ?? "",
     targets,
   };
+}
+
+function normalizeComparableText(value) {
+  return String(value ?? "").trim();
+}
+
+function includeSelectedOption(options, selectedValue) {
+  const selected = normalizeComparableText(selectedValue);
+  if (!selected || selected === FALLBACK_VALUE) return options;
+  if (options.some((option) => String(option) === selected)) return options;
+  return sortTemplateKeys([...options, selected]);
+}
+
+function buildComparableSubmission(entry) {
+  const monthlyBreakdown = entry?.monthlyBreakdown || [];
+  const targets = MONTHS.reduce((acc, month) => {
+    const found = monthlyBreakdown.find((row) => {
+      return normalizeMonthKey(row.month) === month.key;
+    });
+
+    acc[month.key] = toNumber(found?.target);
+    return acc;
+  }, {});
+
+  return {
+    planningYear: normalizeComparableText(entry?.planningYear),
+    unit: normalizeUnitCode(entry?.unit || ""),
+    component: normalizeComparableText(entry?.component),
+    subComponent: normalizeComparableText(entry?.subComponent),
+    keyActivity: normalizeComparableText(entry?.keyActivity),
+    no: normalizeComparableText(entry?.no),
+    performanceIndicator: normalizeComparableText(entry?.performanceIndicator),
+    subActivity: normalizeComparableText(entry?.subActivity),
+    titleOfActivities: normalizeComparableText(entry?.titleOfActivities),
+    unitCost: toNumber(entry?.unitCost),
+    targets,
+  };
+}
+
+function hasSubmissionChanges(previousEntry, nextEntry) {
+  return (
+    JSON.stringify(buildComparableSubmission(previousEntry)) !==
+    JSON.stringify(buildComparableSubmission(nextEntry))
+  );
 }
 
 function isSubmissionWindowOpen(submissionWindow) {
@@ -330,6 +435,7 @@ export default function SubmitEntry({
   const [step, setStep] = useState(1);
   const [targetValidationMessage, setTargetValidationMessage] = useState("");
   const [isSubmittingEntry, setIsSubmittingEntry] = useState(false);
+  const [unchangedResubmitEntry, setUnchangedResubmitEntry] = useState(null);
 
   // -------------------------------------------------------------------------
   // Load dropdown data from Supabase. Uses the JSON prop as an initial
@@ -422,6 +528,7 @@ export default function SubmitEntry({
     subComponent,
     keyActivity,
     selectedNo,
+    watchedPerformanceIndicator,
     watchedSubActivity,
     titleOfActivities,
   ] = useWatch({
@@ -433,6 +540,7 @@ export default function SubmitEntry({
       "subComponent",
       "keyActivity",
       "no",
+      "performanceIndicator",
       "subActivity",
       "titleOfActivities",
     ],
@@ -452,9 +560,39 @@ export default function SubmitEntry({
     control,
   });
   const hydratedFormKeyRef = useRef("");
+  const hydratingFormRef = useRef(false);
   const scheduleStepUpdate = useCallback((nextStep) => {
     window.setTimeout(() => setStep(nextStep), 0);
   }, []);
+  const resetHydratedForm = useCallback((values, nextStep = 1) => {
+    hydratingFormRef.current = true;
+    reset(values);
+    scheduleStepUpdate(nextStep);
+    window.setTimeout(() => {
+      hydratingFormRef.current = false;
+    }, 0);
+  }, [reset, scheduleStepUpdate]);
+
+  const clearNoSelection = useCallback(() => {
+    resetField("no");
+    resetField("performanceIndicator");
+    resetField("subActivity");
+  }, [resetField]);
+
+  const clearKeyActivitySelection = useCallback(() => {
+    resetField("keyActivity");
+    clearNoSelection();
+  }, [clearNoSelection, resetField]);
+
+  const clearSubComponentSelection = useCallback(() => {
+    resetField("subComponent");
+    clearKeyActivitySelection();
+  }, [clearKeyActivitySelection, resetField]);
+
+  const clearComponentSelection = useCallback(() => {
+    resetField("component");
+    clearSubComponentSelection();
+  }, [clearSubComponentSelection, resetField]);
 
   const handleCreateNewEntry = useCallback(() => {
     onStartNewEntry?.();
@@ -467,12 +605,14 @@ export default function SubmitEntry({
   }, [clearEditingEntry, onClearDraft, onStartNewEntry, reset, scheduleStepUpdate]);
 
   const unitOptions = useMemo(() => {
-    return sortTemplateKeys([...new Set((templateData?.unitOptions || []).map((item) => item.value))]);
-  }, [templateData]);
+    const options = sortTemplateKeys([...new Set((templateData?.unitOptions || []).map((item) => item.value))]);
+    return includeSelectedOption(options, unit);
+  }, [templateData, unit]);
 
   const componentOptions = useMemo(() => {
-    return sortTemplateKeys(Object.keys(templateData?.hierarchy || {}));
-  }, [templateData]);
+    const options = sortTemplateKeys(Object.keys(templateData?.hierarchy || {}));
+    return includeSelectedOption(options, component);
+  }, [component, templateData]);
 
   const currentComponentNode = useMemo(() => {
     return templateData?.hierarchy?.[component] || null;
@@ -483,14 +623,16 @@ export default function SubmitEntry({
     return sortTemplateKeys(Object.keys(currentComponentNode || {}));
   }, [component, currentComponentNode]);
 
+  const visibleSubComponentOptions = useMemo(() => {
+    const options = sortTemplateKeys(rawSubComponentKeys.filter((key) => key !== ""));
+    return includeSelectedOption(options, subComponent);
+  }, [rawSubComponentKeys, subComponent]);
+
   const hasNoSubComponent =
     Boolean(component) &&
+    visibleSubComponentOptions.length === 0 &&
     (rawSubComponentKeys.length === 0 ||
       (rawSubComponentKeys.length === 1 && rawSubComponentKeys[0] === ""));
-
-  const visibleSubComponentOptions = useMemo(() => {
-    return sortTemplateKeys(rawSubComponentKeys.filter((key) => key !== ""));
-  }, [rawSubComponentKeys]);
 
   const subComponentKey = useMemo(() => {
     if (!component || !subComponent) return "";
@@ -508,10 +650,11 @@ export default function SubmitEntry({
 
   const keyActivityOptions = useMemo(() => {
     if (!component || !hasSubComponentSelection) return [];
-    return sortTemplateKeys(Object.keys(
+    const options = sortTemplateKeys(Object.keys(
       templateData?.hierarchy?.[component]?.[subComponentKey] || {},
     ));
-  }, [component, hasSubComponentSelection, subComponentKey, templateData]);
+    return includeSelectedOption(options, keyActivity);
+  }, [component, hasSubComponentSelection, keyActivity, subComponentKey, templateData]);
 
   const hasNoKeyActivity =
     Boolean(component) && hasSubComponentSelection && keyActivityOptions.length === 0;
@@ -533,10 +676,38 @@ export default function SubmitEntry({
 
   const noOptions = useMemo(() => {
     if (!component || !hasSubComponentSelection || !selectedKeyActivity) return [];
-    return sortIndicatorItems(
+    const options = sortIndicatorItems(
       templateData?.hierarchy?.[component]?.[subComponentKey]?.[selectedKeyActivity] || []
     );
-  }, [component, hasSubComponentSelection, subComponentKey, selectedKeyActivity, templateData]);
+    if (
+      !selectedNo ||
+      selectedNo === FALLBACK_VALUE ||
+      options.some((item) => String(item.no) === String(selectedNo))
+    ) {
+      return options;
+    }
+    return sortIndicatorItems([
+      ...options,
+      {
+        no: selectedNo,
+        performanceIndicator: watchedPerformanceIndicator || entryToEdit?.performanceIndicator || "",
+        subActivities:
+          watchedSubActivity && watchedSubActivity !== FALLBACK_VALUE
+            ? [watchedSubActivity]
+            : [],
+      },
+    ]);
+  }, [
+    component,
+    entryToEdit?.performanceIndicator,
+    hasSubComponentSelection,
+    selectedKeyActivity,
+    selectedNo,
+    subComponentKey,
+    templateData,
+    watchedPerformanceIndicator,
+    watchedSubActivity,
+  ]);
 
   const selectedNoEntry = useMemo(() => {
     return noOptions.find((item) => String(item.no) === String(selectedNo));
@@ -546,8 +717,9 @@ export default function SubmitEntry({
     Boolean(component) && hasKeyActivitySelection && noOptions.length === 0;
 
   const subActivityOptions = useMemo(() => {
-    return sortTemplateKeys(selectedNoEntry?.subActivities || []);
-  }, [selectedNoEntry]);
+    const options = sortTemplateKeys(selectedNoEntry?.subActivities || []);
+    return includeSelectedOption(options, watchedSubActivity);
+  }, [selectedNoEntry, watchedSubActivity]);
 
   const hasNoSubActivity =
     (hasNoPerformanceIndicator || Boolean(selectedNo)) &&
@@ -633,42 +805,33 @@ export default function SubmitEntry({
   useEffect(() => {
     const isReturnedEdit = entryToEdit && entryToEdit.status === "Returned";
     const hasDraftValues = Boolean(draftState?.values);
+    const hasLiveTemplateIds = Boolean(templateData?.idMap);
     const hydrationKey = isReturnedEdit
-      ? `edit:${entryToEdit.id}:${draftState?.mode || "none"}:${draftState?.entryId || "none"}:${hasDraftValues}`
+      ? `edit:${entryToEdit.id}:${entryToEdit.updatedAt || entryToEdit.submittedAt || "saved"}:${hasLiveTemplateIds}`
       : `new:${draftState?.mode || "none"}:${hasDraftValues}`;
 
     if (hydratedFormKeyRef.current === hydrationKey) return;
     hydratedFormKeyRef.current = hydrationKey;
 
     if (isReturnedEdit) {
-      const shouldUseEditDraft =
-        draftState?.mode === "edit" && draftState?.entryId === entryToEdit.id;
-
-      const nextValues = shouldUseEditDraft
-        ? mergeWithDefaultFormValues(draftState?.values)
-        : buildFormValuesFromEntry(entryToEdit);
-
-      reset(nextValues);
-      scheduleStepUpdate(shouldUseEditDraft ? draftState?.step || 1 : 1);
+      resetHydratedForm(buildFormValuesFromEntry(entryToEdit, templateData), 1);
       return;
     }
 
     if (draftState?.mode === "new" && draftState?.values) {
-      reset(mergeWithDefaultFormValues(draftState.values));
-      scheduleStepUpdate(draftState?.step || 1);
+      resetHydratedForm(mergeWithDefaultFormValues(draftState.values), draftState?.step || 1);
       return;
     }
 
-    reset(defaultFormValues);
-    scheduleStepUpdate(1);
+    resetHydratedForm(defaultFormValues, 1);
   }, [
     draftState?.entryId,
     draftState?.mode,
     draftState?.step,
     draftState?.values,
     entryToEdit,
-    reset,
-    scheduleStepUpdate,
+    resetHydratedForm,
+    templateData,
   ]);
 
   useEffect(() => {
@@ -684,35 +847,15 @@ export default function SubmitEntry({
   }, [draftValues, entryToEdit, onDraftChange, step]);
 
   useEffect(() => {
-    resetField("component");
-    resetField("subComponent");
-    resetField("keyActivity");
-    resetField("no");
-    resetField("performanceIndicator");
-    resetField("subActivity");
-  }, [unit, resetField]);
-
-  useEffect(() => {
-    resetField("subComponent");
-    resetField("keyActivity");
-    resetField("no");
-    resetField("performanceIndicator");
-    resetField("subActivity");
-
     if (component && hasNoSubComponent) {
       setValue("subComponent", FALLBACK_VALUE, {
         shouldValidate: true,
         shouldDirty: false,
       });
     }
-  }, [component, hasNoSubComponent, resetField, setValue]);
+  }, [component, hasNoSubComponent, setValue]);
 
   useEffect(() => {
-    resetField("keyActivity");
-    resetField("no");
-    resetField("performanceIndicator");
-    resetField("subActivity");
-
     if (hasNoKeyActivity) {
       // Missing KA/PI/Sub Activity rows are valid template states. Store N/A so
       // required validation can pass while the UI clearly shows no data exists.
@@ -733,13 +876,9 @@ export default function SubmitEntry({
         shouldDirty: false,
       });
     }
-  }, [subComponent, hasNoKeyActivity, resetField, setValue]);
+  }, [hasNoKeyActivity, setValue]);
 
   useEffect(() => {
-    resetField("no");
-    resetField("performanceIndicator");
-    resetField("subActivity");
-
     if (hasNoPerformanceIndicator) {
       // A key activity can exist before indicators are encoded. Treat the lower
       // hierarchy as intentionally N/A instead of blocking Step 2.
@@ -756,9 +895,11 @@ export default function SubmitEntry({
         shouldDirty: false,
       });
     }
-  }, [keyActivity, hasNoPerformanceIndicator, resetField, setValue]);
+  }, [hasNoPerformanceIndicator, setValue]);
 
   useEffect(() => {
+    if (hydratingFormRef.current) return;
+
     if (hasNoPerformanceIndicator) {
       setValue("performanceIndicator", FALLBACK_VALUE, {
         shouldValidate: false,
@@ -892,6 +1033,28 @@ export default function SubmitEntry({
     }
   };
 
+  const saveReturnedEntry = async (updatedEntry) => {
+    setIsSubmittingEntry(true);
+    try {
+      await onSaveEditedEntry(entryToEdit.id, updatedEntry);
+      reset(defaultFormValues);
+      setStep(1);
+      onClearDraft?.();
+      clearEditingEntry?.();
+      navigate("/entries");
+    } finally {
+      setIsSubmittingEntry(false);
+    }
+  };
+
+  const confirmUnchangedResubmit = async () => {
+    if (!unchangedResubmitEntry) return;
+
+    const pendingEntry = unchangedResubmitEntry;
+    setUnchangedResubmitEntry(null);
+    await saveReturnedEntry(pendingEntry);
+  };
+
   const onSubmit = async (data) => {
     if (isSubmittingEntry) return;
 
@@ -955,21 +1118,17 @@ export default function SubmitEntry({
         grandTotal,
         status: "Pending Review",
         adminComment: "",
-        reviewedAt: "",
-        resubmittedAt: new Date().toISOString(),
+        reviewerId: null,
+        reviewedAt: null,
+        submittedAt: new Date().toISOString(),
       };
 
-      setIsSubmittingEntry(true);
-      try {
-        await onSaveEditedEntry(entryToEdit.id, updatedEntry);
-        reset(defaultFormValues);
-        setStep(1);
-        onClearDraft?.();
-        clearEditingEntry?.();
-        navigate("/entries");
-      } finally {
-        setIsSubmittingEntry(false);
+      if (!hasSubmissionChanges(entryToEdit, updatedEntry)) {
+        setUnchangedResubmitEntry(updatedEntry);
+        return;
       }
+
+      await saveReturnedEntry(updatedEntry);
       return;
     }
 
@@ -1152,6 +1311,7 @@ export default function SubmitEntry({
                   <select
                     {...register("unit", {
                       required: "Unit is required",
+                      onChange: clearComponentSelection,
                     })}
                     className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-300"
                   >
@@ -1178,6 +1338,7 @@ export default function SubmitEntry({
                   <select
                     {...register("component", {
                       required: "Component is required",
+                      onChange: clearSubComponentSelection,
                     })}
                     disabled={!unit}
                     className="w-full rounded-lg border px-3 py-2 text-sm outline-none disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-gray-300"
@@ -1220,6 +1381,7 @@ export default function SubmitEntry({
                     <select
                       {...register("subComponent", {
                         required: "Sub component is required",
+                        onChange: clearKeyActivitySelection,
                       })}
                       disabled={!component}
                       className="w-full rounded-lg border px-3 py-2 text-sm outline-none disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-gray-300"
@@ -1265,6 +1427,7 @@ export default function SubmitEntry({
                     <select
                       {...register("keyActivity", {
                         required: "Key Activity is required",
+                        onChange: clearNoSelection,
                       })}
                       disabled={
                         !component || (!hasNoSubComponent && !subComponent)
@@ -1307,6 +1470,7 @@ export default function SubmitEntry({
                     <select
                       {...register("no", {
                         required: "No. is required",
+                        onChange: () => resetField("subActivity"),
                       })}
                       disabled={!selectedKeyActivity}
                       className="w-full rounded-lg border px-3 py-2 text-sm outline-none disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-gray-300"
@@ -1723,7 +1887,9 @@ export default function SubmitEntry({
                       <span className="font-medium">
                         Performance Indicator:
                       </span>{" "}
-                      {selectedNoEntry?.performanceIndicator || "N/A"}
+                      {watchedPerformanceIndicator ||
+                        selectedNoEntry?.performanceIndicator ||
+                        "N/A"}
                     </p>
                     <p>
                       <span className="font-medium">Sub Activity:</span>{" "}
@@ -1851,6 +2017,46 @@ export default function SubmitEntry({
           </form>
         </CardContent>
       </Card>
+
+      {unchangedResubmitEntry && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 py-4"
+          onClick={() => !isSubmittingEntry && setUnchangedResubmitEntry(null)}
+        >
+          <div
+            className="w-full max-w-md overflow-hidden rounded-[1.5rem] bg-white shadow-[0_22px_70px_rgba(15,23,42,0.28)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="border-b bg-white px-6 py-5">
+              <h2 className="text-xl font-bold tracking-tight text-slate-900">
+                No Changes Detected
+              </h2>
+              <p className="mt-2 text-sm text-slate-500">
+                This returned entry looks the same as before. Do you still want to resubmit it for review?
+              </p>
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 rounded-b-[1.5rem] border-t bg-slate-50/80 px-6 py-4 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setUnchangedResubmitEntry(null)}
+                disabled={isSubmittingEntry}
+              >
+                Keep Editing
+              </Button>
+              <Button
+                type="button"
+                onClick={confirmUnchangedResubmit}
+                disabled={isSubmittingEntry}
+                className="border-0 bg-gradient-to-r from-[#1f2f74] to-[#2a4694] text-white shadow-[0_6px_16px_rgba(31,47,116,0.28)] hover:from-[#19265f] hover:to-[#213a80] disabled:cursor-wait disabled:opacity-75"
+              >
+                {isSubmittingEntry ? "Resubmitting..." : "Resubmit Anyway"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

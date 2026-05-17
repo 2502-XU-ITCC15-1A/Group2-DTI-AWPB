@@ -92,6 +92,7 @@ export default function MyEntries({
   const [yearFilter, setYearFilter] = useState("all");
   const [currentUserId, setCurrentUserId] = useState(null);
   const [pdfExportingEntryId, setPdfExportingEntryId] = useState(null);
+  const [editingEntryId, setEditingEntryId] = useState(null);
   const navigate = useNavigate();
 
   // Get current logged-in user
@@ -142,11 +143,23 @@ export default function MyEntries({
     });
   }, [myEntries, searchTerm, statusFilter, yearFilter]);
 
-  const handleEdit = (entry) => {
-    if (!windowOpen) return;
-    onEditEntry(entry);
-    setSelectedEntry(null);
-    navigate("/submit");
+  const handleEdit = async (entry) => {
+    if (!windowOpen || editingEntryId) return;
+
+    setEditingEntryId(entry.id);
+    try {
+      await onEditEntry(entry);
+      setSelectedEntry(null);
+      navigate("/submit");
+    } catch (error) {
+      onShowToast?.({
+        title: "Edit failed",
+        description: error.message || "Could not load this returned entry.",
+        type: "error",
+      });
+    } finally {
+      setEditingEntryId(null);
+    }
   };
 
   const clearFilters = () => {
@@ -384,7 +397,7 @@ export default function MyEntries({
                               variant="ghost"
                               size="icon-sm"
                               onClick={() => handleEdit(entry)}
-                              disabled={!windowOpen}
+                              disabled={!windowOpen || editingEntryId === entry.id}
                               title={
                                 windowOpen
                                   ? "Edit returned entry"
@@ -401,7 +414,15 @@ export default function MyEntries({
                                   : "text-slate-400"
                               }
                             >
-                              {windowOpen ? <Pencil /> : <Lock />}
+                              {windowOpen ? (
+                                editingEntryId === entry.id ? (
+                                  <Loader2 className="animate-spin" />
+                                ) : (
+                                  <Pencil />
+                                )
+                              ) : (
+                                <Lock />
+                              )}
                             </Button>
                           )}
 

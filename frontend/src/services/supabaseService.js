@@ -72,6 +72,14 @@ function isBlankClassification(value) {
   );
 }
 
+function normalizeNullableTimestamp(value) {
+  return value === '' ? null : value;
+}
+
+function normalizeNullableId(value) {
+  return value === '' ? null : value;
+}
+
 // Authentication services
 export const authService = {
   async signUp(email, password, metadata = {}) {
@@ -279,6 +287,11 @@ export const entriesService = {
     return {
       id: row.id,
       ownerId: row.owner_id,
+      unitId: row.unit_id,
+      componentId: row.component_id,
+      subComponentId: row.sub_component_id,
+      keyActivityId: row.key_activity_id,
+      subActivityId: row.sub_activity_id,
       ownerUsername: row.profiles?.username || '',
       ownerFullName: row.profiles?.full_name || '',
       ownerDisplayName: formatPersonName(row.profiles),
@@ -557,10 +570,24 @@ export const entriesService = {
     const dbUpdates = {};
     
     if (updates.status !== undefined) dbUpdates.status = updates.status;
-    if (updates.review_date !== undefined) dbUpdates.review_date = updates.review_date;
-    if (updates.reviewedAt !== undefined) dbUpdates.review_date = updates.reviewedAt;
-    if (updates.reviewerId !== undefined) dbUpdates.reviewer_id = updates.reviewerId;
-    if (updates.reviewer_id !== undefined) dbUpdates.reviewer_id = updates.reviewer_id;
+    if (updates.submission_date !== undefined) dbUpdates.submission_date = normalizeNullableTimestamp(updates.submission_date);
+    if (updates.submittedAt !== undefined) dbUpdates.submission_date = normalizeNullableTimestamp(updates.submittedAt);
+    if (updates.review_date !== undefined) dbUpdates.review_date = normalizeNullableTimestamp(updates.review_date);
+    if (updates.reviewedAt !== undefined) dbUpdates.review_date = normalizeNullableTimestamp(updates.reviewedAt);
+    if (updates.reviewerId !== undefined) dbUpdates.reviewer_id = normalizeNullableId(updates.reviewerId);
+    if (updates.reviewer_id !== undefined) dbUpdates.reviewer_id = normalizeNullableId(updates.reviewer_id);
+    if (updates.planningYear !== undefined) dbUpdates.planning_year = parseInt(updates.planningYear, 10);
+    if (updates.planning_year !== undefined) dbUpdates.planning_year = parseInt(updates.planning_year, 10);
+    if (updates.unitId) dbUpdates.unit_id = updates.unitId;
+    if (updates.unit_id) dbUpdates.unit_id = updates.unit_id;
+    if (updates.componentId) dbUpdates.component_id = updates.componentId;
+    if (updates.component_id) dbUpdates.component_id = updates.component_id;
+    if (updates.subComponentId !== undefined) dbUpdates.sub_component_id = normalizeNullableId(updates.subComponentId);
+    if (updates.sub_component_id !== undefined) dbUpdates.sub_component_id = normalizeNullableId(updates.sub_component_id);
+    if (updates.keyActivityId !== undefined) dbUpdates.key_activity_id = normalizeNullableId(updates.keyActivityId);
+    if (updates.key_activity_id !== undefined) dbUpdates.key_activity_id = normalizeNullableId(updates.key_activity_id);
+    if (updates.subActivityId !== undefined) dbUpdates.sub_activity_id = normalizeNullableId(updates.subActivityId);
+    if (updates.sub_activity_id !== undefined) dbUpdates.sub_activity_id = normalizeNullableId(updates.sub_activity_id);
     if (updates.titleOfActivities !== undefined) dbUpdates.title_of_activities = updates.titleOfActivities;
     if (updates.unitCost !== undefined) dbUpdates.unit_cost = updates.unitCost;
     if (updates.adminComment !== undefined) dbUpdates.admin_comment = updates.adminComment;
