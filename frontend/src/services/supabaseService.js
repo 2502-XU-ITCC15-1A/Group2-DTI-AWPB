@@ -38,6 +38,39 @@ const MONTH_NAMES = {
   dec: 'December'
 };
 
+function getTemplatePrefix(value) {
+  return String(value || '').match(/\b\d+(?:\.\d+)+/)?.[0] || '';
+}
+
+function isOtherOperatingCostKeyActivity(value) {
+  return /other\s+operating\s+cost\s+attributed\s+to\s+component/i.test(
+    String(value || ''),
+  );
+}
+
+function keyActivityBelongsToSubComponent(keyActivityName, subComponentName) {
+  if (isOtherOperatingCostKeyActivity(keyActivityName)) return true;
+
+  const keyPrefix = getTemplatePrefix(keyActivityName);
+  const subPrefix = getTemplatePrefix(subComponentName);
+
+  return !keyPrefix || !subPrefix || keyPrefix.startsWith(`${subPrefix}.`);
+}
+
+function subActivityBelongsToKeyActivity(subActivityName, keyActivityName) {
+  if (isOtherOperatingCostKeyActivity(keyActivityName)) return true;
+
+  const subActivityPrefix = getTemplatePrefix(subActivityName);
+  const keyPrefix = getTemplatePrefix(keyActivityName);
+
+  return (
+    !subActivityPrefix ||
+    !keyPrefix ||
+    subActivityPrefix === keyPrefix ||
+    subActivityPrefix.startsWith(`${keyPrefix}.`)
+  );
+}
+
 function formatPersonName(profile) {
   if (!profile) return '';
   return profile.full_name || profile.username || '';
@@ -769,6 +802,7 @@ export const templateService = {
       if (!sc) continue;
       const comp = compMap[sc.component_id];
       if (!comp) continue;
+      if (!keyActivityBelongsToSubComponent(ka.name, sc.name)) continue;
 
       const pis = piByKa[ka.id] || [];
       if (pis.length === 0) {
@@ -778,7 +812,9 @@ export const templateService = {
           ka.activity_no !== "";
 
         if (hasLegacyIndicator) {
-          const subs = saByKa[ka.id] || [];
+          const subs = (saByKa[ka.id] || []).filter((sa) =>
+            subActivityBelongsToKeyActivity(sa.name, ka.name),
+          );
           const rowsToAdd = subs.length > 0 ? subs : [null];
 
           for (const sa of rowsToAdd) {
@@ -804,7 +840,9 @@ export const templateService = {
         for (const pi of pis) {
           const piSubs = saByPi[pi.id] || [];
           const legacySubs = pis.length === 1 ? saByKa[ka.id] || [] : [];
-          const subs = piSubs.length > 0 ? piSubs : legacySubs;
+          const subs = (piSubs.length > 0 ? piSubs : legacySubs).filter((sa) =>
+            subActivityBelongsToKeyActivity(sa.name, ka.name),
+          );
           if (subs.length === 0) {
             rows.push({
               component: comp.name, component_id: comp.id, component_sort_order: comp.sort_order,
