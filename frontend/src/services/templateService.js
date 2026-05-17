@@ -10,6 +10,39 @@ function makeTemplateCode(prefix, value, index = 0) {
   return `${prefix}_${index + 1}_${slug || "ITEM"}`;
 }
 
+function getTemplatePrefix(value) {
+  return String(value || "").match(/\b\d+(?:\.\d+)+/)?.[0] || "";
+}
+
+function isOtherOperatingCostKeyActivity(value) {
+  return /other\s+operating\s+cost\s+attributed\s+to\s+component/i.test(
+    String(value || ""),
+  );
+}
+
+function keyActivityBelongsToSubComponent(keyActivityName, subComponentName) {
+  if (isOtherOperatingCostKeyActivity(keyActivityName)) return true;
+
+  const keyPrefix = getTemplatePrefix(keyActivityName);
+  const subPrefix = getTemplatePrefix(subComponentName);
+
+  return !keyPrefix || !subPrefix || keyPrefix.startsWith(`${subPrefix}.`);
+}
+
+function subActivityBelongsToKeyActivity(subActivityName, keyActivityName) {
+  if (isOtherOperatingCostKeyActivity(keyActivityName)) return true;
+
+  const subActivityPrefix = getTemplatePrefix(subActivityName);
+  const keyPrefix = getTemplatePrefix(keyActivityName);
+
+  return (
+    !subActivityPrefix ||
+    !keyPrefix ||
+    subActivityPrefix === keyPrefix ||
+    subActivityPrefix.startsWith(`${keyPrefix}.`)
+  );
+}
+
 async function getOrCreateComponent(name, sortOrder) {
   const { data: existing, error: findError } = await supabase
     .from("components")
@@ -375,6 +408,7 @@ function buildHierarchyRows({ components = [], subComponents = [], keyActivities
     const subComponent = subComponentById[keyActivity.sub_component_id];
     const component = componentById[subComponent?.component_id];
     if (!component || !subComponent) return;
+    if (!keyActivityBelongsToSubComponent(keyActivity.name, subComponent.name)) return;
 
     const indicatorRows = indicatorsByKeyActivity[keyActivity.id] || [];
     if (indicatorRows.length === 0) {
@@ -386,7 +420,9 @@ function buildHierarchyRows({ components = [], subComponents = [], keyActivities
         legacyActivityNo !== "";
 
       if (hasLegacyIndicator) {
-        const childSubActivities = subActivitiesByKeyActivity[keyActivity.id] || [];
+        const childSubActivities = (subActivitiesByKeyActivity[keyActivity.id] || []).filter(
+          (subActivity) => subActivityBelongsToKeyActivity(subActivity.name, keyActivity.name),
+        );
         const rowsToAdd = childSubActivities.length > 0 ? childSubActivities : [null];
 
         rowsToAdd.forEach((subActivity) => {
@@ -449,8 +485,11 @@ function buildHierarchyRows({ components = [], subComponents = [], keyActivities
       const indicatorSubActivities = subActivitiesByIndicator[indicator.id] || [];
       const legacySubActivities =
         indicatorRows.length === 1 ? subActivitiesByKeyActivity[keyActivity.id] || [] : [];
-      const childSubActivities =
-        indicatorSubActivities.length > 0 ? indicatorSubActivities : legacySubActivities;
+      const childSubActivities = (
+        indicatorSubActivities.length > 0 ? indicatorSubActivities : legacySubActivities
+      ).filter((subActivity) =>
+        subActivityBelongsToKeyActivity(subActivity.name, keyActivity.name),
+      );
       const rowsToAdd = childSubActivities.length > 0 ? childSubActivities : [null];
 
       rowsToAdd.forEach((subActivity) => {
