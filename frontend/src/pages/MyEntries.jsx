@@ -62,6 +62,10 @@ function getStatusBadgeVariant(status) {
   }
 }
 
+function getStatusLabel(status) {
+  return status === "Pending Review" ? "Pending" : status;
+}
+
 function isSubmissionWindowOpen(submissionWindow) {
   const { startDate, endDate } = submissionWindow || {};
   if (!startDate || !endDate) return false;
@@ -310,15 +314,15 @@ export default function MyEntries({
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full table-fixed border-collapse text-sm">
+              <table className="min-w-[980px] w-full table-fixed border-collapse text-sm">
                 <colgroup>
-                  <col className="w-[30%]" />
-                  <col className="w-[11%]" />
+                  <col className="w-[28%]" />
                   <col className="w-[10%]" />
+                  <col className="w-[9%]" />
                   <col className="w-[18%]" />
+                  <col className="w-[14%]" />
                   <col className="w-[13%]" />
-                  <col className="w-[11%]" />
-                  <col className="w-[18%]" />
+                  <col className="w-[8%]" />
                 </colgroup>
 
                 <thead className="bg-slate-50 text-left">
@@ -335,7 +339,7 @@ export default function MyEntries({
                     <th className="px-4 py-2.5 font-semibold text-slate-700">
                       Submitted
                     </th>
-                    <th className="px-4 py-2.5 font-semibold text-slate-700">
+                    <th className="px-4 py-2.5 text-center font-semibold text-slate-700">
                       Status
                     </th>
                     <th className="px-4 py-2.5 text-right font-semibold text-slate-700">
@@ -367,13 +371,13 @@ export default function MyEntries({
                         {formatDate(entry.submittedAt)}
                       </td>
 
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-4 text-center whitespace-nowrap">
                         <Badge variant={getStatusBadgeVariant(entry.status)}>
-                          {entry.status}
+                          {getStatusLabel(entry.status)}
                         </Badge>
                       </td>
 
-                      <td className="px-4 py-4 text-right font-medium text-slate-900">
+                      <td className="px-4 py-4 text-right font-medium whitespace-nowrap text-slate-900">
                         {formatCurrency(entry.grandTotal)}
                       </td>
 

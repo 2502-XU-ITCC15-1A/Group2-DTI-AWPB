@@ -76,6 +76,10 @@ function getStatusBadgeVariant(status) {
   }
 }
 
+function getStatusLabel(status) {
+  return status === "Pending Review" ? "Pending" : status;
+}
+
 function isApprovedStatus(status) {
   return String(status || "").trim().toLowerCase() === "approved";
 }
@@ -935,8 +939,8 @@ export default function AdminReview({
                   <col className="w-[9%]" />
                   <col className="w-[8%]" />
                   <col className="w-[15%]" />
-                  <col className="w-[13%]" />
                   <col className="w-[14%]" />
+                  <col className="w-[13%]" />
                   <col className="w-[8%]" />
                 </colgroup>
 
@@ -947,7 +951,7 @@ export default function AdminReview({
                     <th className="px-4 py-2.5 font-semibold text-slate-700">Unit</th>
                     <th className="px-4 py-2.5 font-semibold text-slate-700">Year</th>
                     <th className="px-4 py-2.5 font-semibold text-slate-700">Submitted</th>
-                    <th className="px-4 py-2.5 font-semibold text-slate-700">Status</th>
+                    <th className="px-4 py-2.5 text-center font-semibold text-slate-700">Status</th>
                     <th className="px-4 py-2.5 text-right font-semibold text-slate-700">Total</th>
                     <th className="px-4 py-2.5 text-center font-semibold text-slate-700">Action</th>
                   </tr>
@@ -967,12 +971,12 @@ export default function AdminReview({
                       </td>
                       <td className="px-4 py-4 text-slate-700">{entry.planningYear || "N/A"}</td>
                       <td className="px-4 py-4 text-slate-700">{formatDate(entry.submittedAt)}</td>
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-4 text-center whitespace-nowrap">
                         <Badge variant={getStatusBadgeVariant(entry.status)}>
-                          {entry.status}
+                          {getStatusLabel(entry.status)}
                         </Badge>
                       </td>
-                      <td className="px-4 py-4 text-right font-medium text-slate-900">
+                      <td className="px-4 py-4 text-right font-medium whitespace-nowrap text-slate-900">
                         {formatCurrency(entry.grandTotal)}
                       </td>
                       <td className="px-4 py-4 align-middle">
