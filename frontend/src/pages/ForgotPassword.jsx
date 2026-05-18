@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { buildAppUrl } from "../lib/siteUrl";
 import { supabase } from "../lib/supabase";
 import { authService } from "../services/supabaseService";
 
@@ -57,7 +58,7 @@ export default function ForgotPassword() {
 
       await authService.requestPasswordReset(
         authEmail,
-        `${window.location.origin}/confirm-password`
+        buildAppUrl("/confirm-password")
       );
 
       setSuccessMessage("If the account exists, a password reset link has been sent to the email address.");

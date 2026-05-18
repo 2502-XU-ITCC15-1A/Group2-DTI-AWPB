@@ -25,11 +25,18 @@ This guide will help you migrate from the custom Express backend to Supabase.
 
 1. In your Supabase project, go to **Settings** → **API**
 2. Copy the **Project URL** and **anon public** key
-3. Update `frontend/src/lib/supabase.js`:
+3. Create `frontend/.env` from `frontend/.env.example`
+4. Set the Supabase credentials:
 
-```javascript
-const supabaseUrl = 'https://your-project-id.supabase.co'
-const supabaseAnonKey = 'your-actual-anon-key-here'
+```bash
+VITE_SUPABASE_URL=https://your-project-id.supabase.co
+VITE_SUPABASE_ANON_KEY=your-actual-anon-key-here
+```
+
+For deployed password reset emails, also set the frontend origin:
+
+```bash
+VITE_APP_URL=https://your-app.vercel.app
 ```
 
 ## Step 3: Run Database Migrations
@@ -150,6 +157,19 @@ Once migration is complete, you can remove:
 
 2. Deploy frontend to your hosting platform
 
+3. Configure Supabase Auth redirect URLs:
+   - Go to **Authentication** → **URL Configuration**
+   - Set **Site URL** to your deployed frontend URL, for example `https://your-app.vercel.app`
+   - Add this exact redirect URL to **Redirect URLs**: `https://your-app.vercel.app/confirm-password`
+   - If you use Vercel preview deployments, add a wildcard redirect such as `https://*.vercel.app/confirm-password`
+
+4. In Vercel, add these frontend environment variables and redeploy:
+   ```bash
+   VITE_SUPABASE_URL=https://your-project-id.supabase.co
+   VITE_SUPABASE_ANON_KEY=your-actual-anon-key-here
+   VITE_APP_URL=https://your-app.vercel.app
+   ```
+
 ## Troubleshooting
 
 ### Common Issues:
@@ -165,7 +185,13 @@ Once migration is complete, you can remove:
    - Go to Authentication → Settings
    - Disable "Enable email confirmations" for testing
 
-4. **Missing Data**: Check that seed data was properly inserted
+4. **Password reset link opens localhost**: Update the Supabase Auth URL Configuration
+   - Set **Site URL** to the deployed Vercel URL, not `http://localhost:5173`
+   - Add `https://your-app.vercel.app/confirm-password` to **Redirect URLs**
+   - Make sure Vercel has `VITE_APP_URL=https://your-app.vercel.app`
+   - Redeploy the frontend and request a new reset email
+
+5. **Missing Data**: Check that seed data was properly inserted
    - Go to Table Editor to verify data exists
 
 ## Benefits of Supabase Migration
