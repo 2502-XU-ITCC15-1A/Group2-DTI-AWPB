@@ -107,6 +107,7 @@ function logTemplateCrudError(action, error) {
 
 export default function ManageTemplate({
   templateData,
+  defaultTemplateData,
   onUpdateTemplateData,
   onResetTemplate,
   onShowToast,
@@ -140,6 +141,7 @@ export default function ManageTemplate({
   const [editingSubActivityIndex, setEditingSubActivityIndex] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [isResettingTemplate, setIsResettingTemplate] = useState(false);
 
   const [newComponentName, setNewComponentName] = useState("");
   const [newSubComponentName, setNewSubComponentName] = useState("");
@@ -853,14 +855,29 @@ export default function ManageTemplate({
   // For component delete modal trigger (kept original name)
   const setComponentDeleteTarget = (name) => setDeleteTarget({ kind: "component", label: name });
 
-  const handleResetTemplate = () => {
-    onResetTemplate?.();
-    setResetDialogOpen(false);
-    onShowToast?.({
-      title: "Template reset",
-      description: "The template was restored to its default frontend state.",
-      type: "success",
-    });
+  const handleResetTemplate = async () => {
+    const resetSnapshot = cloneTemplateData(defaultTemplateData || templateData);
+    setIsResettingTemplate(true);
+
+    try {
+      await templateMgmtService.restoreTemplateSnapshot(resetSnapshot);
+      onResetTemplate?.(resetSnapshot);
+      setResetDialogOpen(false);
+      onShowToast?.({
+        title: "Template reset",
+        description: "The template was restored to the saved default snapshot.",
+        type: "success",
+      });
+    } catch (err) {
+      logTemplateCrudError("resetTemplate", err);
+      onShowToast?.({
+        title: "Reset failed",
+        description: err.message,
+        type: "error",
+      });
+    } finally {
+      setIsResettingTemplate(false);
+    }
   };
 
   return (
@@ -1794,18 +1811,24 @@ export default function ManageTemplate({
           <DialogHeader>
             <DialogTitle>Reset template to default?</DialogTitle>
             <DialogDescription>
-              This will restore the template to the default frontend state and
-              replace your current template changes in this view.
+              {isResettingTemplate
+                ? "Please wait while resetting the template. This may take a moment."
+                : "This will restore the template to the saved correct version and update Supabase to match it."}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <DialogClose asChild>
-              <Button type="button" variant="outline">
+              <Button type="button" variant="outline" disabled={isResettingTemplate}>
                 Cancel
               </Button>
             </DialogClose>
-            <Button type="button" onClick={handleResetTemplate} className={primaryButtonClass}>
-              Reset to Default
+            <Button
+              type="button"
+              onClick={handleResetTemplate}
+              className={primaryButtonClass}
+              disabled={isResettingTemplate}
+            >
+              {isResettingTemplate ? "Resetting..." : "Reset to Default"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1088,6 +1088,360 @@ async function verifySavedSubActivity(row, payload) {
   return response.data;
 }
 
+function makeTemplateCode(prefix, value, index = 0) {
+  const slug = String(value || 'item')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 72);
+
+  return `${prefix}_${index}_${slug || 'ITEM'}`;
+}
+
+function makeUniqueTemplateCode(rows, prefix, value, index) {
+  const existingCodes = new Set((rows || []).map((row) => row.code).filter(Boolean));
+  const baseCode = makeTemplateCode(prefix, value, index);
+  let nextCode = baseCode;
+  let suffix = 2;
+
+  while (existingCodes.has(nextCode)) {
+    nextCode = `${baseCode}_${suffix}`;
+    suffix += 1;
+  }
+
+  return nextCode;
+}
+
+function normalizeTemplateValue(value) {
+  return String(value ?? '').trim();
+}
+
+function templateValuesEqual(currentValue, nextValue) {
+  return normalizeTemplateValue(currentValue) === normalizeTemplateValue(nextValue);
+}
+
+function rowMatchesParent(row, parentColumn, parentId) {
+  return !parentColumn || row?.[parentColumn] === parentId;
+}
+
+function findReusableTemplateRow(rows, usedIds, {
+  name,
+  sortOrder,
+  parentColumn,
+  parentId,
+  activityNo,
+} = {}) {
+  const candidates = (rows || []).filter(
+    (row) => row?.id && !usedIds.has(row.id) && rowMatchesParent(row, parentColumn, parentId),
+  );
+  const normalizedName = normalizeTemplateValue(name).toLowerCase();
+  const normalizedActivityNo = normalizeTemplateValue(activityNo);
+
+  if (normalizedActivityNo) {
+    const byActiveActivityNo = candidates.find(
+      (row) => row.is_active !== false && templateValuesEqual(row.activity_no, normalizedActivityNo),
+    );
+    if (byActiveActivityNo) return byActiveActivityNo;
+
+    const byActivityNo = candidates.find((row) =>
+      templateValuesEqual(row.activity_no, normalizedActivityNo),
+    );
+    if (byActivityNo) return byActivityNo;
+  }
+
+  if (normalizedName) {
+    const byActiveName = candidates.find(
+      (row) => row.is_active !== false && normalizeTemplateValue(row.name).toLowerCase() === normalizedName,
+    );
+    if (byActiveName) return byActiveName;
+
+    const byName = candidates.find(
+      (row) => normalizeTemplateValue(row.name).toLowerCase() === normalizedName,
+    );
+    if (byName) return byName;
+  }
+
+  const byActiveSortOrder = candidates.find(
+    (row) => row.is_active !== false && templateValuesEqual(row.sort_order, sortOrder),
+  );
+  if (byActiveSortOrder) return byActiveSortOrder;
+
+  return candidates.find((row) => templateValuesEqual(row.sort_order, sortOrder)) || null;
+}
+
+async function updateTemplateRow(table, row, payload, action) {
+  const updates = withoutUndefined(payload);
+  const changedPayload = Object.fromEntries(
+    Object.entries(updates).filter(([key, value]) => !templateValuesEqual(row?.[key], value)),
+  );
+
+  if (Object.keys(changedPayload).length === 0) {
+    return row;
+  }
+
+  const { data, error } = await supabase
+    .from(table)
+    .update(changedPayload)
+    .eq('id', row.id)
+    .select()
+    .single();
+
+  return assertTemplateMutation(action, { id: row.id, ...changedPayload }, data, error);
+}
+
+async function insertTemplateRow(table, payload, action) {
+  const { data, error } = await supabase
+    .from(table)
+    .insert(withoutUndefined(payload))
+    .select()
+    .single();
+
+  return assertTemplateMutation(action, payload, data, error);
+}
+
+async function ensureTemplateRow({
+  table,
+  rows,
+  usedIds,
+  match,
+  payload,
+  codePrefix,
+}) {
+  const existing = findReusableTemplateRow(rows, usedIds, match);
+
+  if (existing) {
+    const savedRow = await updateTemplateRow(table, existing, payload, `restore.${table}`);
+    Object.assign(existing, savedRow);
+    usedIds.add(savedRow.id);
+    return savedRow;
+  }
+
+  const insertPayload = {
+    ...payload,
+    code: codePrefix
+      ? makeUniqueTemplateCode(rows, codePrefix, payload.name, payload.sort_order)
+      : undefined,
+  };
+  const savedRow = await insertTemplateRow(table, insertPayload, `restore.${table}`);
+  rows.push(savedRow);
+  usedIds.add(savedRow.id);
+  return savedRow;
+}
+
+async function fetchTemplateRows(table, { optional = false } = {}) {
+  const { data, error } = await supabase
+    .from(table)
+    .select('*')
+    .order('sort_order');
+
+  if (
+    optional &&
+    (
+      error?.message?.includes(table) ||
+      error?.code === '42P01' ||
+      error?.code === 'PGRST205'
+    )
+  ) {
+    return [];
+  }
+
+  if (error) throw error;
+  return data || [];
+}
+
+async function fetchOptionalTemplateRows(table) {
+  const { data, error } = await supabase
+    .from(table)
+    .select('*')
+    .order('sort_order');
+
+  if (
+    error?.message?.includes(table) ||
+    error?.code === '42P01' ||
+    error?.code === 'PGRST205'
+  ) {
+    return { rows: [], exists: false };
+  }
+
+  if (error) throw error;
+  return { rows: data || [], exists: true };
+}
+
+async function deactivateRowsOutsideSnapshot(table, rows, usedIds) {
+  const staleRows = (rows || []).filter(
+    (row) => row?.id && row.is_active !== false && !usedIds.has(row.id),
+  );
+
+  for (const row of staleRows) {
+    await updateTemplateRow(table, row, { is_active: false }, `restore.deactivate.${table}`);
+  }
+}
+
+async function restoreTemplateSnapshot(templateData) {
+  const hierarchy = templateData?.hierarchy || {};
+  if (Object.keys(hierarchy).length === 0) {
+    throw new Error('No default template snapshot is available.');
+  }
+
+  const subActivitySchema = await probeSubActivitySchema();
+  const [components, subComponents, keyActivities, performanceIndicatorResult, subActivities] =
+    await Promise.all([
+      fetchTemplateRows('components'),
+      fetchTemplateRows('sub_components'),
+      fetchTemplateRows('key_activities'),
+      fetchOptionalTemplateRows('performance_indicators'),
+      fetchTemplateRows('sub_activities'),
+    ]);
+
+  const performanceIndicators = performanceIndicatorResult.rows;
+  const supportsPerformanceIndicators = performanceIndicatorResult.exists;
+  const used = {
+    components: new Set(),
+    subComponents: new Set(),
+    keyActivities: new Set(),
+    performanceIndicators: new Set(),
+    subActivities: new Set(),
+  };
+
+  for (const [componentIndex, [componentName, subComponentMap]] of Object.entries(hierarchy).entries()) {
+    const componentSortOrder = componentIndex + 1;
+    const component = await ensureTemplateRow({
+      table: 'components',
+      rows: components,
+      usedIds: used.components,
+      match: { name: componentName, sortOrder: componentSortOrder },
+      payload: {
+        name: componentName,
+        sort_order: componentSortOrder,
+        is_active: true,
+      },
+      codePrefix: 'COMP',
+    });
+
+    for (const [subComponentIndex, [subComponentName, keyActivityMap]] of Object.entries(subComponentMap || {}).entries()) {
+      const subComponentSortOrder = subComponentIndex + 1;
+      const subComponent = await ensureTemplateRow({
+        table: 'sub_components',
+        rows: subComponents,
+        usedIds: used.subComponents,
+        match: {
+          name: subComponentName,
+          sortOrder: subComponentSortOrder,
+          parentColumn: 'component_id',
+          parentId: component.id,
+        },
+        payload: {
+          component_id: component.id,
+          name: subComponentName,
+          sort_order: subComponentSortOrder,
+          is_active: true,
+        },
+        codePrefix: `SUB_COMP_${String(component.id).slice(0, 8)}`,
+      });
+
+      for (const [keyActivityIndex, [keyActivityName, indicators]] of Object.entries(keyActivityMap || {}).entries()) {
+        const keyActivitySortOrder = keyActivityIndex + 1;
+        const firstIndicator = indicators?.[0] || {};
+        const keyActivity = await ensureTemplateRow({
+          table: 'key_activities',
+          rows: keyActivities,
+          usedIds: used.keyActivities,
+          match: {
+            name: keyActivityName,
+            sortOrder: keyActivitySortOrder,
+            parentColumn: 'sub_component_id',
+            parentId: subComponent.id,
+          },
+          payload: {
+            sub_component_id: subComponent.id,
+            name: keyActivityName,
+            activity_no: firstIndicator.no ?? null,
+            performance_indicator: firstIndicator.performanceIndicator || '',
+            sort_order: keyActivitySortOrder,
+            is_active: true,
+          },
+          codePrefix: `KEY_ACT_${String(subComponent.id).slice(0, 8)}`,
+        });
+
+        let legacySubActivitySortOrder = 0;
+
+        for (const [indicatorIndex, indicator] of (indicators || []).entries()) {
+          const indicatorSortOrder = indicatorIndex + 1;
+          let performanceIndicator = null;
+
+          if (supportsPerformanceIndicators) {
+            performanceIndicator = await ensureTemplateRow({
+              table: 'performance_indicators',
+              rows: performanceIndicators,
+              usedIds: used.performanceIndicators,
+              match: {
+                sortOrder: indicatorSortOrder,
+                parentColumn: 'key_activity_id',
+                parentId: keyActivity.id,
+                activityNo: indicator.no,
+              },
+              payload: {
+                key_activity_id: keyActivity.id,
+                activity_no: indicator.no,
+                label: indicator.performanceIndicator || '',
+                sort_order: indicatorSortOrder,
+                is_active: true,
+              },
+            });
+          }
+
+          for (const [subActivityIndex, subActivityName] of (indicator.subActivities || []).entries()) {
+            const subActivitySortOrder = supportsPerformanceIndicators
+              ? subActivityIndex + 1
+              : legacySubActivitySortOrder + 1;
+            legacySubActivitySortOrder += 1;
+
+            await ensureTemplateRow({
+              table: 'sub_activities',
+              rows: subActivities,
+              usedIds: used.subActivities,
+              match: {
+                name: subActivityName,
+                sortOrder: subActivitySortOrder,
+                parentColumn: supportsPerformanceIndicators && subActivitySchema.hasPerformanceIndicatorId
+                  ? 'performance_indicator_id'
+                  : 'key_activity_id',
+                parentId: supportsPerformanceIndicators && subActivitySchema.hasPerformanceIndicatorId
+                  ? performanceIndicator?.id
+                  : keyActivity.id,
+              },
+              payload: {
+                key_activity_id: subActivitySchema.hasKeyActivityId ? keyActivity.id : undefined,
+                performance_indicator_id: subActivitySchema.hasPerformanceIndicatorId
+                  ? performanceIndicator?.id
+                  : undefined,
+                name: subActivityName,
+                sort_order: subActivitySortOrder,
+                is_active: true,
+              },
+              codePrefix: `SUB_ACT_${String(performanceIndicator?.id || keyActivity.id).slice(0, 8)}`,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  await deactivateRowsOutsideSnapshot('sub_activities', subActivities, used.subActivities);
+  if (supportsPerformanceIndicators) {
+    await deactivateRowsOutsideSnapshot(
+      'performance_indicators',
+      performanceIndicators,
+      used.performanceIndicators,
+    );
+  }
+  await deactivateRowsOutsideSnapshot('key_activities', keyActivities, used.keyActivities);
+  await deactivateRowsOutsideSnapshot('sub_components', subComponents, used.subComponents);
+  await deactivateRowsOutsideSnapshot('components', components, used.components);
+
+  return templateData;
+}
+
 export const templateMgmtService = {
   getComponentIdByName,
   getSubComponentIdByName,
@@ -1095,6 +1449,7 @@ export const templateMgmtService = {
   getPerformanceIndicatorIdByNo,
   getPerformanceIndicatorRowByNo,
   getSubActivityRowByName,
+  restoreTemplateSnapshot,
 
   async createComponent(data) {
     const payload = {

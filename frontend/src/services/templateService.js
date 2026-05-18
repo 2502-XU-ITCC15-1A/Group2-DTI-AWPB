@@ -258,7 +258,8 @@ async function getOrCreateSubActivity(keyActivityId, performanceIndicatorId, nam
     .single();
 
   if (insertResponse.error?.message?.includes("performance_indicator_id")) {
-    const { performance_indicator_id, ...fallbackPayload } = payload;
+    const fallbackPayload = { ...payload };
+    delete fallbackPayload.performance_indicator_id;
     fallbackPayload.code = makeTemplateCode(`SUB_ACT_${String(keyActivityId).slice(0, 8)}`, name, sortOrder);
     insertResponse = await supabase
       .from("sub_activities")
