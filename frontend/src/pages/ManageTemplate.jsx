@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ChevronDown, Pencil, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
 import AdminDeleteTemplateItemModal from "@/components/admin/AdminDeleteTemplateItemModal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -110,6 +110,7 @@ export default function ManageTemplate({
   defaultTemplateData,
   onUpdateTemplateData,
   onResetTemplate,
+  onSetDefaultTemplate,
   onShowToast,
 }) {
   const hierarchy = useMemo(() => templateData?.hierarchy || {}, [templateData]);
@@ -141,6 +142,7 @@ export default function ManageTemplate({
   const [editingSubActivityIndex, setEditingSubActivityIndex] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [setDefaultDialogOpen, setSetDefaultDialogOpen] = useState(false);
   const [isResettingTemplate, setIsResettingTemplate] = useState(false);
 
   const [newComponentName, setNewComponentName] = useState("");
@@ -880,6 +882,26 @@ export default function ManageTemplate({
     }
   };
 
+  const handleSetCurrentAsDefault = () => {
+    const defaultSnapshot = cloneTemplateData(templateData || { hierarchy: {} });
+    if (Object.keys(defaultSnapshot?.hierarchy || {}).length === 0) {
+      onShowToast?.({
+        title: "Default not updated",
+        description: "There is no template data to save as default.",
+        type: "error",
+      });
+      return;
+    }
+
+    onSetDefaultTemplate?.(defaultSnapshot);
+    setSetDefaultDialogOpen(false);
+    onShowToast?.({
+      title: "Default updated",
+      description: "The current dropdowns are now used by Reset to Default.",
+      type: "success",
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -894,9 +916,20 @@ export default function ManageTemplate({
 
         <div className="flex flex-wrap gap-2">
           <Button
+            type="button"
+            variant="outline"
+            className={secondaryButtonClass}
+            onClick={() => setSetDefaultDialogOpen(true)}
+          >
+            <Save size={16} />
+            Set as Default
+          </Button>
+          <Button
+            type="button"
             className={compactGradientButtonClass}
             onClick={() => setResetDialogOpen(true)}
           >
+            <RotateCcw size={16} />
             Reset to Default
           </Button>
         </div>
@@ -1829,6 +1862,31 @@ export default function ManageTemplate({
               disabled={isResettingTemplate}
             >
               {isResettingTemplate ? "Resetting..." : "Reset to Default"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={setDefaultDialogOpen} onOpenChange={setSetDefaultDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Set current template as default?</DialogTitle>
+            <DialogDescription>
+              This will make the current dropdowns the saved version used by Reset to Default.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button
+              type="button"
+              onClick={handleSetCurrentAsDefault}
+              className={primaryButtonClass}
+            >
+              Set as Default
             </Button>
           </DialogFooter>
         </DialogContent>

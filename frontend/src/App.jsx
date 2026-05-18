@@ -18,7 +18,10 @@ import {
 const INITIAL_ACCOUNTS = [];
 const ADMIN_VIEW_STORAGE_KEY = "awpb_admin_active_view";
 const SESSION_EXPIRES_AT_STORAGE_KEY = "awpb_session_expires_at";
-const TEMPLATE_DEFAULT_STORAGE_KEY = "awpb_template_default_snapshot_2026_05_18";
+const TEMPLATE_DEFAULT_STORAGE_KEY = "awpb_template_default_snapshot_2026_05_18_v2";
+const LEGACY_TEMPLATE_DEFAULT_STORAGE_KEYS = [
+  "awpb_template_default_snapshot_2026_05_18",
+];
 const SESSION_TIMEOUT_MS = 10 * 60 * 1000;
 const SESSION_ACTIVITY_REFRESH_THROTTLE_MS = 15 * 1000;
 const SESSION_ACTIVITY_EVENTS = [
@@ -67,6 +70,10 @@ function cloneTemplateState(templateData) {
 
 function getStoredTemplateDefaultState() {
   try {
+    LEGACY_TEMPLATE_DEFAULT_STORAGE_KEYS.forEach((key) => {
+      window.localStorage.removeItem(key);
+    });
+
     const storedValue = window.localStorage.getItem(TEMPLATE_DEFAULT_STORAGE_KEY);
     if (!storedValue) return null;
 
@@ -169,6 +176,12 @@ function App() {
       dismissToast(id);
     }, 2600);
   }, [dismissToast]);
+
+  const handleSetTemplateDefault = useCallback((nextTemplateData) => {
+    const nextDefault = cloneTemplateState(nextTemplateData || templateData);
+    setTemplateDefaultData(nextDefault);
+    storeTemplateDefaultState(nextDefault);
+  }, [templateData]);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -859,7 +872,7 @@ async function loadTemplate() {
           <Route path="/" element={canUseEncoderView ? <Home entries={encoderEntries} submissionWindow={submissionWindow} onStartNewEntry={handleStartNewEntry} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
           <Route path="/entries" element={canUseEncoderView ? <MyEntries entries={encoderEntries} onEditEntry={handleStartEdit} onDeleteEntry={handleDeleteEntry} onShowToast={showToast} submissionWindow={submissionWindow} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
           <Route path="/submit" element={canUseEncoderView ? <SubmitEntry onAddEntry={handleAddEntry} entryToEdit={entryBeingEdited} onSaveEditedEntry={handleSaveEditedEntry} clearEditingEntry={clearEditingEntry} onStartNewEntry={handleStartNewEntry} submissionWindow={submissionWindow} draftState={submitEntryDraft} onDraftChange={setSubmitEntryDraft} onClearDraft={clearSubmitEntryDraft} currentUser={authUser} onShowToast={showToast} templateData={templateData} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
-          <Route path="/admin/manage-template" element={canUseAdminView ? <ManageTemplate templateData={templateData} defaultTemplateData={templateDefaultData} onUpdateTemplateData={setTemplateData} onResetTemplate={(nextTemplateData) => setTemplateData(cloneTemplateState(nextTemplateData || templateDefaultData))} onShowToast={showToast} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
+          <Route path="/admin/manage-template" element={canUseAdminView ? <ManageTemplate templateData={templateData} defaultTemplateData={templateDefaultData} onUpdateTemplateData={setTemplateData} onResetTemplate={(nextTemplateData) => setTemplateData(cloneTemplateState(nextTemplateData || templateDefaultData))} onSetDefaultTemplate={handleSetTemplateDefault} onShowToast={showToast} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
           <Route path="/admin/dashboard" element={canUseAdminView ? <AdminDashboard entries={entries} submissionWindow={submissionWindow} onUpdateSubmissionWindow={handleUpdateSubmissionWindow} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
           <Route path="/admin/review" element={canUseAdminView ? <AdminReview entries={entries} currentUser={authUser} onReplaceEntry={handleReplaceEntry} onRemoveEntry={handleRemoveEntry} onUpdateEntry={handleUpdateEntry} onDeleteEntry={handleDeleteEntry} onShowToast={showToast} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
           <Route path="/admin/manage-accounts" element={canUseAdminView ? <ManageAccounts accounts={accounts} onUpdateAccount={handleUpdateAccount} onShowToast={showToast} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
