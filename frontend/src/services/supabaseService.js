@@ -988,12 +988,24 @@ async function getPerformanceIndicatorRowByNo(indicatorNo, kaName, subCompName, 
   const kaId = await getKeyActivityIdByName(kaName, subCompName, componentName);
   const { data, error } = await supabase
     .from('performance_indicators')
-    .select('id')
+    .select('id, is_active, sort_order')
     .eq('key_activity_id', kaId)
     .eq('activity_no', indicatorNo)
-    .maybeSingle();
+    .eq('is_active', true)
+    .order('sort_order')
+    .limit(1);
   if (error) throw error;
-  return data;
+  if (data?.[0]) return data[0];
+
+  const fallback = await supabase
+    .from('performance_indicators')
+    .select('id, is_active, sort_order')
+    .eq('key_activity_id', kaId)
+    .eq('activity_no', indicatorNo)
+    .order('sort_order')
+    .limit(1);
+  if (fallback.error) throw fallback.error;
+  return fallback.data?.[0] || null;
 }
 
 async function getPerformanceIndicatorIdByNo(indicatorNo, kaName, subCompName, componentName) {
@@ -1277,6 +1289,25 @@ async function deactivateRowsOutsideSnapshot(table, rows, usedIds) {
   }
 }
 
+async function deactivateIndicatorsOutsideKeyActivitySnapshot(rows, allowedIndicatorNosByKeyActivity) {
+  const staleRows = (rows || []).filter((row) => {
+    if (!row?.id || row.is_active === false) return false;
+    const allowedIndicatorNos = allowedIndicatorNosByKeyActivity.get(row.key_activity_id);
+    if (!allowedIndicatorNos) return false;
+
+    return !allowedIndicatorNos.has(normalizeTemplateValue(row.activity_no));
+  });
+
+  for (const row of staleRows) {
+    await updateTemplateRow(
+      'performance_indicators',
+      row,
+      { is_active: false },
+      'restore.deactivate.performance_indicators.byKeyActivity',
+    );
+  }
+}
+
 async function restoreTemplateSnapshot(templateData) {
   const hierarchy = templateData?.hierarchy || {};
   if (Object.keys(hierarchy).length === 0) {
@@ -1302,6 +1333,7 @@ async function restoreTemplateSnapshot(templateData) {
     performanceIndicators: new Set(),
     subActivities: new Set(),
   };
+  const allowedIndicatorNosByKeyActivity = new Map();
 
   for (const [componentIndex, [componentName, subComponentMap]] of Object.entries(hierarchy).entries()) {
     const componentSortOrder = componentIndex + 1;
@@ -1362,6 +1394,10 @@ async function restoreTemplateSnapshot(templateData) {
           },
           codePrefix: `KEY_ACT_${String(subComponent.id).slice(0, 8)}`,
         });
+        allowedIndicatorNosByKeyActivity.set(
+          keyActivity.id,
+          new Set((indicators || []).map((indicator) => normalizeTemplateValue(indicator?.no))),
+        );
 
         let legacySubActivitySortOrder = 0;
 
@@ -1429,6 +1465,10 @@ async function restoreTemplateSnapshot(templateData) {
 
   await deactivateRowsOutsideSnapshot('sub_activities', subActivities, used.subActivities);
   if (supportsPerformanceIndicators) {
+    await deactivateIndicatorsOutsideKeyActivitySnapshot(
+      performanceIndicators,
+      allowedIndicatorNosByKeyActivity,
+    );
     await deactivateRowsOutsideSnapshot(
       'performance_indicators',
       performanceIndicators,

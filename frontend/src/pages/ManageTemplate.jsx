@@ -144,6 +144,7 @@ export default function ManageTemplate({
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [setDefaultDialogOpen, setSetDefaultDialogOpen] = useState(false);
   const [isResettingTemplate, setIsResettingTemplate] = useState(false);
+  const [isSettingDefaultTemplate, setIsSettingDefaultTemplate] = useState(false);
 
   const [newComponentName, setNewComponentName] = useState("");
   const [newSubComponentName, setNewSubComponentName] = useState("");
@@ -882,24 +883,38 @@ export default function ManageTemplate({
     }
   };
 
-  const handleSetCurrentAsDefault = () => {
-    const defaultSnapshot = cloneTemplateData(templateData || { hierarchy: {} });
-    if (Object.keys(defaultSnapshot?.hierarchy || {}).length === 0) {
+  const handleSetCurrentAsDefault = async () => {
+    setIsSettingDefaultTemplate(true);
+
+    try {
+      const savedDefault = await onSetDefaultTemplate?.(templateData);
+      const defaultSnapshot = cloneTemplateData(savedDefault || templateData || { hierarchy: {} });
+
+      if (Object.keys(defaultSnapshot?.hierarchy || {}).length === 0) {
+        onShowToast?.({
+          title: "Default not updated",
+          description: "There is no template data to save as default.",
+          type: "error",
+        });
+        return;
+      }
+
+      setSetDefaultDialogOpen(false);
+      onShowToast?.({
+        title: "Default updated",
+        description: "The current dropdowns are now used by Reset to Default.",
+        type: "success",
+      });
+    } catch (err) {
+      logTemplateCrudError("setCurrentAsDefault", err);
       onShowToast?.({
         title: "Default not updated",
-        description: "There is no template data to save as default.",
+        description: err.message,
         type: "error",
       });
-      return;
+    } finally {
+      setIsSettingDefaultTemplate(false);
     }
-
-    onSetDefaultTemplate?.(defaultSnapshot);
-    setSetDefaultDialogOpen(false);
-    onShowToast?.({
-      title: "Default updated",
-      description: "The current dropdowns are now used by Reset to Default.",
-      type: "success",
-    });
   };
 
   return (
@@ -920,6 +935,7 @@ export default function ManageTemplate({
             variant="outline"
             className={secondaryButtonClass}
             onClick={() => setSetDefaultDialogOpen(true)}
+            disabled={isSettingDefaultTemplate}
           >
             <Save size={16} />
             Set as Default
@@ -1877,7 +1893,7 @@ export default function ManageTemplate({
           </DialogHeader>
           <DialogFooter>
             <DialogClose asChild>
-              <Button type="button" variant="outline">
+              <Button type="button" variant="outline" disabled={isSettingDefaultTemplate}>
                 Cancel
               </Button>
             </DialogClose>
@@ -1885,8 +1901,9 @@ export default function ManageTemplate({
               type="button"
               onClick={handleSetCurrentAsDefault}
               className={primaryButtonClass}
+              disabled={isSettingDefaultTemplate}
             >
-              Set as Default
+              {isSettingDefaultTemplate ? "Saving..." : "Set as Default"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -18,9 +18,10 @@ import {
 const INITIAL_ACCOUNTS = [];
 const ADMIN_VIEW_STORAGE_KEY = "awpb_admin_active_view";
 const SESSION_EXPIRES_AT_STORAGE_KEY = "awpb_session_expires_at";
-const TEMPLATE_DEFAULT_STORAGE_KEY = "awpb_template_default_snapshot_2026_05_18_v2";
+const TEMPLATE_DEFAULT_STORAGE_KEY = "awpb_template_default_snapshot_2026_05_18_v3";
 const LEGACY_TEMPLATE_DEFAULT_STORAGE_KEYS = [
   "awpb_template_default_snapshot_2026_05_18",
+  "awpb_template_default_snapshot_2026_05_18_v2",
 ];
 const SESSION_TIMEOUT_MS = 10 * 60 * 1000;
 const SESSION_ACTIVITY_REFRESH_THROTTLE_MS = 15 * 1000;
@@ -68,6 +69,131 @@ function cloneTemplateState(templateData) {
   return JSON.parse(JSON.stringify(templateData || { hierarchy: {} }));
 }
 
+function normalizeIndicatorNo(value) {
+  return String(value ?? "").trim();
+}
+
+function getIndicatorPlacementKey(component, subComponent, indicatorNo) {
+  return `${component}||${subComponent}||${normalizeIndicatorNo(indicatorNo)}`;
+}
+
+function buildDefaultIndicatorPlacements() {
+  const placements = new Map();
+  const defaultHierarchy = initialTemplateData?.hierarchy || {};
+
+  Object.entries(defaultHierarchy).forEach(([component, subComponents]) => {
+    Object.entries(subComponents || {}).forEach(([subComponent, keyActivities]) => {
+      Object.entries(keyActivities || {}).forEach(([keyActivity, indicators]) => {
+        (indicators || []).forEach((indicator) => {
+          const indicatorNo = normalizeIndicatorNo(indicator?.no);
+          if (!indicatorNo) return;
+
+          const placementKey = getIndicatorPlacementKey(component, subComponent, indicatorNo);
+          const keyActivitySet = placements.get(placementKey) || new Set();
+          keyActivitySet.add(keyActivity);
+          placements.set(placementKey, keyActivitySet);
+        });
+      });
+    });
+  });
+
+  return placements;
+}
+
+const DEFAULT_INDICATOR_PLACEMENTS = buildDefaultIndicatorPlacements();
+
+function templateHasIndicatorAtKeyActivity(hierarchy, component, subComponent, keyActivity, indicatorNo) {
+  const indicators = hierarchy?.[component]?.[subComponent]?.[keyActivity] || [];
+  return indicators.some((indicator) => normalizeIndicatorNo(indicator?.no) === indicatorNo);
+}
+
+function normalizeTemplateSnapshot(templateData) {
+  const nextTemplate = cloneTemplateState(templateData);
+  const hierarchy = nextTemplate.hierarchy || {};
+
+  Object.entries(hierarchy).forEach(([component, subComponents]) => {
+    Object.entries(subComponents || {}).forEach(([subComponent, keyActivities]) => {
+      Object.entries(keyActivities || {}).forEach(([keyActivity, indicators]) => {
+        const seenIndicatorNos = new Set();
+
+        hierarchy[component][subComponent][keyActivity] = (indicators || []).filter((indicator) => {
+          const indicatorNo = normalizeIndicatorNo(indicator?.no);
+          if (!indicatorNo) return true;
+
+          const duplicateKey = `${keyActivity}||${indicatorNo}`;
+          if (seenIndicatorNos.has(duplicateKey)) return false;
+          seenIndicatorNos.add(duplicateKey);
+
+          const expectedKeyActivities = DEFAULT_INDICATOR_PLACEMENTS.get(
+            getIndicatorPlacementKey(component, subComponent, indicatorNo),
+          );
+
+          if (!expectedKeyActivities || expectedKeyActivities.has(keyActivity)) return true;
+
+          return ![...expectedKeyActivities].some((expectedKeyActivity) =>
+            templateHasIndicatorAtKeyActivity(
+              hierarchy,
+              component,
+              subComponent,
+              expectedKeyActivity,
+              indicatorNo,
+            ),
+          );
+        });
+      });
+    });
+  });
+
+  return nextTemplate;
+}
+
+function buildTemplateStateFromRows(data = []) {
+  const hierarchy = {};
+
+  data.forEach((row) => {
+    const c = row.component;
+    const s = row.sub_component;
+    const k = row.key_activity;
+    const actNo = row.activity_no ?? row.no;
+    const piText = row.performance_indicator || row.label || "";
+
+    if (!c) return;
+    if (!hierarchy[c]) hierarchy[c] = {};
+    if (!s) return;
+    if (!hierarchy[c][s]) hierarchy[c][s] = {};
+    if (!k) return;
+    if (!hierarchy[c][s][k]) hierarchy[c][s][k] = [];
+
+    // Skip rows without an activity number (placeholder key-activity rows)
+    if (actNo === null || actNo === undefined || actNo === "") return;
+
+    // Find or create the entry grouped by activity_no
+    const bucket = hierarchy[c][s][k];
+    let entry = bucket.find((item) => String(item.no) === String(actNo));
+    if (!entry) {
+      entry = { no: actNo, performanceIndicator: piText, subActivities: [] };
+      bucket.push(entry);
+    }
+
+    // Add sub-activity if present and not already tracked
+    if (row.sub_activity && !entry.subActivities.includes(row.sub_activity)) {
+      entry.subActivities.push(row.sub_activity);
+    }
+  });
+
+  return normalizeTemplateSnapshot({
+    ...createInitialTemplateState(),
+    hierarchy,
+  });
+}
+
+async function fetchTemplateState() {
+  const { data, error } = await getTemplateHierarchy();
+
+  if (error) throw error;
+  return buildTemplateStateFromRows(data || []);
+}
+
 function getStoredTemplateDefaultState() {
   try {
     LEGACY_TEMPLATE_DEFAULT_STORAGE_KEYS.forEach((key) => {
@@ -79,7 +205,7 @@ function getStoredTemplateDefaultState() {
 
     const parsedValue = JSON.parse(storedValue);
     return parsedValue?.hierarchy && typeof parsedValue.hierarchy === "object"
-      ? parsedValue
+      ? normalizeTemplateSnapshot(parsedValue)
       : null;
   } catch {
     return null;
@@ -88,7 +214,10 @@ function getStoredTemplateDefaultState() {
 
 function storeTemplateDefaultState(templateData) {
   try {
-    window.localStorage.setItem(TEMPLATE_DEFAULT_STORAGE_KEY, JSON.stringify(templateData));
+    window.localStorage.setItem(
+      TEMPLATE_DEFAULT_STORAGE_KEY,
+      JSON.stringify(normalizeTemplateSnapshot(templateData)),
+    );
   } catch {
     // Local storage can be unavailable in private or locked-down browser modes.
   }
@@ -177,10 +306,20 @@ function App() {
     }, 2600);
   }, [dismissToast]);
 
-  const handleSetTemplateDefault = useCallback((nextTemplateData) => {
-    const nextDefault = cloneTemplateState(nextTemplateData || templateData);
+  const handleSetTemplateDefault = useCallback(async (nextTemplateData) => {
+    let sourceTemplateData = nextTemplateData || templateData;
+
+    try {
+      sourceTemplateData = await fetchTemplateState();
+      setTemplateData(sourceTemplateData);
+    } catch (error) {
+      console.error("Failed to refresh template before saving default:", error);
+    }
+
+    const nextDefault = normalizeTemplateSnapshot(sourceTemplateData);
     setTemplateDefaultData(nextDefault);
     storeTemplateDefaultState(nextDefault);
+    return nextDefault;
   }, [templateData]);
 
   const handleLogout = useCallback(async () => {
@@ -212,61 +351,22 @@ function App() {
   }, [authLoading, authUserId, isRecoveryMode]);
 
 async function loadTemplate() {
-  const { data, error } = await getTemplateHierarchy();
+  try {
+    const nextTemplateData = await fetchTemplateState();
+    setTemplateData(nextTemplateData);
 
-  if (error) {
+    const storedDefaultData = getStoredTemplateDefaultState();
+    if (storedDefaultData) {
+      setTemplateDefaultData(cloneTemplateState(storedDefaultData));
+      return;
+    }
+
+    const defaultSnapshot = normalizeTemplateSnapshot(nextTemplateData);
+    setTemplateDefaultData(defaultSnapshot);
+    storeTemplateDefaultState(defaultSnapshot);
+  } catch (error) {
     console.error(error);
-    return;
   }
-
-  const hierarchy = {};
-
-  data.forEach((row) => {
-    const c = row.component;
-    const s = row.sub_component;
-    const k = row.key_activity;
-    const actNo = row.activity_no ?? row.no;
-    const piText = row.performance_indicator || row.label || "";
-
-    if (!c) return;
-    if (!hierarchy[c]) hierarchy[c] = {};
-    if (!s) return;
-    if (!hierarchy[c][s]) hierarchy[c][s] = {};
-    if (!k) return;
-    if (!hierarchy[c][s][k]) hierarchy[c][s][k] = [];
-
-    // Skip rows without an activity number (placeholder key-activity rows)
-    if (actNo === null || actNo === undefined || actNo === "") return;
-
-    // Find or create the entry grouped by activity_no
-    const bucket = hierarchy[c][s][k];
-    let entry = bucket.find((item) => String(item.no) === String(actNo));
-    if (!entry) {
-      entry = { no: actNo, performanceIndicator: piText, subActivities: [] };
-      bucket.push(entry);
-    }
-
-    // Add sub-activity if present and not already tracked
-    if (row.sub_activity && !entry.subActivities.includes(row.sub_activity)) {
-      entry.subActivities.push(row.sub_activity);
-    }
-  });
-
-  const nextTemplateData = {
-    ...createInitialTemplateState(),
-    hierarchy,
-  };
-
-  setTemplateData(nextTemplateData);
-  const storedDefaultData = getStoredTemplateDefaultState();
-  if (storedDefaultData) {
-    setTemplateDefaultData(cloneTemplateState(storedDefaultData));
-    return;
-  }
-
-  const defaultSnapshot = cloneTemplateState(nextTemplateData);
-  setTemplateDefaultData(defaultSnapshot);
-  storeTemplateDefaultState(defaultSnapshot);
 }
 
   // Restore session on page load / listen for auth changes
@@ -872,7 +972,7 @@ async function loadTemplate() {
           <Route path="/" element={canUseEncoderView ? <Home entries={encoderEntries} submissionWindow={submissionWindow} onStartNewEntry={handleStartNewEntry} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
           <Route path="/entries" element={canUseEncoderView ? <MyEntries entries={encoderEntries} onEditEntry={handleStartEdit} onDeleteEntry={handleDeleteEntry} onShowToast={showToast} submissionWindow={submissionWindow} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
           <Route path="/submit" element={canUseEncoderView ? <SubmitEntry onAddEntry={handleAddEntry} entryToEdit={entryBeingEdited} onSaveEditedEntry={handleSaveEditedEntry} clearEditingEntry={clearEditingEntry} onStartNewEntry={handleStartNewEntry} submissionWindow={submissionWindow} draftState={submitEntryDraft} onDraftChange={setSubmitEntryDraft} onClearDraft={clearSubmitEntryDraft} currentUser={authUser} onShowToast={showToast} templateData={templateData} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
-          <Route path="/admin/manage-template" element={canUseAdminView ? <ManageTemplate templateData={templateData} defaultTemplateData={templateDefaultData} onUpdateTemplateData={setTemplateData} onResetTemplate={(nextTemplateData) => setTemplateData(cloneTemplateState(nextTemplateData || templateDefaultData))} onSetDefaultTemplate={handleSetTemplateDefault} onShowToast={showToast} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
+          <Route path="/admin/manage-template" element={canUseAdminView ? <ManageTemplate templateData={templateData} defaultTemplateData={templateDefaultData} onUpdateTemplateData={(nextTemplateData) => setTemplateData(normalizeTemplateSnapshot(nextTemplateData))} onResetTemplate={(nextTemplateData) => setTemplateData(normalizeTemplateSnapshot(nextTemplateData || templateDefaultData))} onSetDefaultTemplate={handleSetTemplateDefault} onShowToast={showToast} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
           <Route path="/admin/dashboard" element={canUseAdminView ? <AdminDashboard entries={entries} submissionWindow={submissionWindow} onUpdateSubmissionWindow={handleUpdateSubmissionWindow} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
           <Route path="/admin/review" element={canUseAdminView ? <AdminReview entries={entries} currentUser={authUser} onReplaceEntry={handleReplaceEntry} onRemoveEntry={handleRemoveEntry} onUpdateEntry={handleUpdateEntry} onDeleteEntry={handleDeleteEntry} onShowToast={showToast} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
           <Route path="/admin/manage-accounts" element={canUseAdminView ? <ManageAccounts accounts={accounts} onUpdateAccount={handleUpdateAccount} onShowToast={showToast} /> : <Navigate to={defaultAuthenticatedPath} replace />} />
