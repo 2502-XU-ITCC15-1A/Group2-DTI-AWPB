@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
 import { Eye, EyeOff, Loader2 } from "lucide-react"
+import logo from "../assets/dtilogo.png"
 import { authService } from "../services/supabaseService"
 
 export default function Login({ onLogin, notice = "" }) {
@@ -85,13 +86,13 @@ export default function Login({ onLogin, notice = "" }) {
                     <div className="mb-5 flex justify-center">
                         <div className="flex h-32 w-full max-w-[256px] items-center justify-center rounded-xl border border-slate-200 px-2 text-sm font-semibold text-slate-700">
                             <img
-                                src="/dti-logo.png"
+                                src={logo}
                                 alt="DTI RAPID Growth Logo"
-                                width="450"
-                                height="170"
+                                width="931"
+                                height="476"
                                 fetchPriority="high"
                                 decoding="sync"
-                                className="h-auto w-full max-w-[220px] object-contain"
+                                className="h-28 w-auto object-contain"
                             />
                         </div>
                     </div>

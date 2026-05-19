@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import logo from "../../assets/dtilogo.png";
 import { NavLink, useLocation } from "react-router-dom";
 import Toast from "@/components/ui/toast";
 import {
@@ -72,11 +73,11 @@ export default function AppLayout({
           <div className="mb-10 px-1">
             <div className="flex h-24 items-center justify-center rounded-2xl border border-slate-300 bg-[#edf4f3] px-2 pb-2 pt-1 shadow-sm">
               <img
-                src="/dti-logo.png"
+                src={logo}
                 alt="DTI RAPID Growth Project"
-                width="450"
-                height="170"
-                className="h-auto w-full max-w-[220px] object-contain"
+                width="931"
+                height="476"
+                className="h-20 w-auto object-contain"
               />
             </div>
           </div>
