@@ -1,4 +1,3 @@
-markdown
 # AWPB System - DTI RAPID Growth Project
 
 An Annual Work and Budget Plan (AWPB) management system for the DTI RAPID Growth Project, built with React and Supabase.
@@ -68,23 +67,22 @@ The AWPB System is a web-based application that allows encoders to submit annual
 
 ---
 
-## Features Needing Fix
+## Remaining Verification
 
-### High Priority
-
-| Issue | Description | Impact | Suggested Fix |
-|-------|-------------|--------|----------------|
-| `handle_new_user` Trigger | Trigger doesn't fire for users created via admin API | Admin-created users need manual profile creation | Modify trigger or create profiles programmatically |
-| RLS Warnings in Dashboard | Reference tables show "RLS Disabled" warnings | Cosmetic only, no functionality impact | Add SELECT-only RLS policies |
-
-### Low Priority
+### Before Final Deployment
 
 | Issue | Description | Impact | Suggested Fix |
 |-------|-------------|--------|----------------|
-| Forgot Password | Feature exists but untested | Password reset flow not verified | Test and implement email reset |
+| Supabase Migrations | Confirm production Supabase has all migrations through `022_allow_encoder_delete_pending_entries.sql` applied | Missing migrations can cause auth, RLS, template, or review workflow issues | Run migrations in order or use `supabase db push` |
+| Password Reset | Forgot/reset password flow depends on Supabase email and redirect settings | Reset links may fail if Site URL or Redirect URLs are wrong | Test with a real account and deployed URL |
+| User Acceptance Testing | Core workflows need real-user validation | Edge cases may only appear with actual DTI data and roles | Test login, submit, return, resubmit, approve, reject, delete pending, and account deactivation |
+
+### Optional Enhancements
+
+| Issue | Description | Impact | Suggested Fix |
+|-------|-------------|--------|----------------|
 | Audit/History Table | No tracking of entry changes | Cannot see who changed what | Create audit trigger and table |
-| Legacy Backend Code | Express server files still in repo | Clutter, not used | Delete `backend/` folder |
-| Legacy Database Files | Old SQL files in root `database/` folder | Clutter, not used | Delete folder |
+| Automated Tests | No test suite is currently configured | Manual testing is required before every release | Add focused tests for services and critical workflows |
 
 
 

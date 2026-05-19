@@ -43,10 +43,10 @@ VITE_APP_URL=https://your-app.vercel.app
 
 ### Option A: Using Supabase Dashboard (Recommended)
 1. Go to **SQL Editor** in your Supabase project
-2. Run each migration file in order:
-   - `supabase/migrations/001_create_awpb_schema.sql`
-   - `supabase/migrations/002_seed_template_data.sql`
-   - `supabase/migrations/003_rls_policies.sql`
+2. Run every file in `supabase/migrations/` in numeric order, from:
+   - `001_create_awpb_schema.sql`
+   - through `022_allow_encoder_delete_pending_entries.sql`
+3. Do not skip later migrations. They include account-management RPCs, password policy enforcement, RLS hardening, review actions, planning estimates, and pending-entry deletion support.
 
 ### Option B: Using Supabase CLI
 1. Install Supabase CLI:
