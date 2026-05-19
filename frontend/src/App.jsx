@@ -926,11 +926,13 @@ async function loadTemplate() {
           <Route
             path="/choose-view"
             element={
-              <ChooseView
-                currentUser={authUser}
-                onChooseView={handleChooseView}
-                onLogout={handleLogout}
-              />
+              <main>
+                <ChooseView
+                  currentUser={authUser}
+                  onChooseView={handleChooseView}
+                  onLogout={handleLogout}
+                />
+              </main>
             }
           />
           <Route path="*" element={<Navigate to="/choose-view" replace />} />

@@ -1,7 +1,6 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
 import { Eye, EyeOff, Loader2 } from "lucide-react"
-import logo from "../assets/dtilogo.png"
 import { authService } from "../services/supabaseService"
 
 export default function Login({ onLogin, notice = "" }) {
@@ -80,12 +79,20 @@ export default function Login({ onLogin, notice = "" }) {
     }
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-gradient-to-r from-[#014b4c] via-[#0a5d60] to-[#4f9597] px-6 py-8">
+        <main className="flex min-h-screen items-center justify-center bg-gradient-to-r from-[#014b4c] via-[#0a5d60] to-[#4f9597] px-6 py-8">
             <div className="w-full max-w-[550px] rounded-[2rem] bg-white px-8 py-10 shadow-xl md:px-12 md:py-12">
                 <div className="mb-8 text-center">
                     <div className="mb-5 flex justify-center">
                         <div className="flex h-32 w-full max-w-[256px] items-center justify-center rounded-xl border border-slate-200 px-2 text-sm font-semibold text-slate-700">
-                            <img src={logo} alt="DTI RAPID Growth Logo" className="h-28 w-auto object-contain"></img>
+                            <img
+                                src="/dti-logo.png"
+                                alt="DTI RAPID Growth Logo"
+                                width="450"
+                                height="170"
+                                fetchPriority="high"
+                                decoding="sync"
+                                className="h-auto w-full max-w-[220px] object-contain"
+                            />
                         </div>
                     </div>
 
@@ -140,6 +147,8 @@ export default function Login({ onLogin, notice = "" }) {
                                 type="button"
                                 onClick={() => setShowPassword((prev) => !prev)}
                                 disabled={isSubmitting}
+                                aria-label={showPassword ? "Hide password" : "Show password"}
+                                aria-pressed={showPassword}
                                 className="absolute inset-y-0 right-0 flex items-center px-4 text-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -178,6 +187,6 @@ export default function Login({ onLogin, notice = "" }) {
                     In Fulfillment of SLP and ITCC project
                 </p>
             </div>
-        </div>
+        </main>
     )
 }

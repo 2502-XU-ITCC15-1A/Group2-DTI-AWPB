@@ -71,7 +71,7 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-r from-[#014b4c] via-[#0a5d60] to-[#4f9597] px-6 py-8">
+    <main className="flex min-h-screen items-center justify-center bg-gradient-to-r from-[#014b4c] via-[#0a5d60] to-[#4f9597] px-6 py-8">
       <div className="w-full max-w-[550px] rounded-[2rem] bg-white px-8 py-10 shadow-xl md:px-12 md:py-12">
         <div className="mb-8 text-center">
           <h1 className="text-4xl font-bold leading-tight text-[#062f35]">
@@ -142,6 +142,6 @@ export default function ForgotPassword() {
           </Link>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
